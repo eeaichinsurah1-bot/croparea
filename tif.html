@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>West Bengal Spatial Data (Multi-Year)</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 100%; }
+        
+        /* Unified Map Control Panels */
+        .legend {
+            background: white; padding: 10px; line-height: 18px; color: #333;
+            border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 13px;
+        }
+        .legend i { width: 16px; height: 16px; float: left; margin-right: 8px; opacity: 0.9; border: 1px solid #ccc; }
+        .legend h4 { margin: 5px 0; font-size: 14px; }
+        
+        /* Coordinate Picker Input Panel */
+        #coordinate-finder {
+            position: absolute; top: 10px; left: 55px; z-index: 1000;
+            background: white; padding: 10px; border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); display: flex; gap: 6px; align-items: center;
+        }
+        #coordinate-finder input { width: 90px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
+        #coordinate-finder button { padding: 5px 10px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        
+        .btn-go { background: #27ae60; }
+        .btn-go:hover { background: #219150; }
+
+        /* Dynamic Mouse Hover Coordinates Widget */
+        #mouse-coords {
+            position: absolute; bottom: 10px; left: 10px; z-index: 1000;
+            background: rgba(255, 255, 255, 0.85); padding: 4px 8px; border-radius: 4px;
+            font-size: 12px; font-family: monospace; border: 1px solid #bbb; pointer-events: none;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        /* Full Screen Loader Indicator overlay */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.85);
+            z-index: 9999; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #27ae60;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        #loading-text {
+            font-size: 16px; font-weight: bold; color: #2c3e50; text-align: center; line-height: 1.5;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-text">Loading GeoTIFF Data Layer...<br><span style="font-size:12px; color:#7f8c8d; font-weight:normal;">Rendering high-resolution spatial details. Please wait.</span></div>
+    </div>
+
+    <div id="coordinate-finder">
+        <input type="number" id="input-lat" placeholder="Latitude" step="any">
+        <input type="number" id="input-lng" placeholder="Longitude" step="any">
+        <button class="btn-go" onclick="plotCustomMarker()">Go to Point</button>
+    </div>
+
+    <div id="mouse-coords">Lat: 0.00000, Lng: 0.00000</div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet/dist/georaster-layer-for-leaflet.min.js"></script>
+
+    <script>
+        var loader = document.getElementById('loading-overlay');
+        var loaderText = document.getElementById('loading-text');
+
+        // Helper functions to control indicator
+        function showLoader(message, submessage) {
+            loaderText.innerHTML = message + '<br><span style="font-size:12px; color:#7f8c8d; font-weight:normal;">' + submessage + '</span>';
+            loader.style.display = 'flex';
+            loader.style.opacity = '1';
+        }
+        function hideLoader() {
+            loader.style.opacity = '0';
+            setTimeout(function() { loader.style.display = 'none'; }, 300); // smooth hide transition
+        }
+
+        // 1. Retrieve the saved session states from local storage
+        var savedLayerLabel = localStorage.getItem("activeTiffLayer");
+        var savedLat = localStorage.getItem("mapLat");
+        var savedLng = localStorage.getItem("mapLng");
+        var savedZoom = localStorage.getItem("mapZoom");
+
+        // 2. Initialize Map
+        var initialCenter = (savedLat && savedLng) ? [parseFloat(savedLat), parseFloat(savedLng)] : [22.9868, 87.8550];
+        var initialZoom = savedZoom ? parseInt(savedZoom) : 7;
+
+        var map = L.map('map').setView(initialCenter, initialZoom);
+        var searchMarker = null;
+
+        var googleStreets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            maxZoom: 20, 
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], 
+            attribution: '&copy; Google Maps'
+        }).addTo(map); 
+
+        var googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 20, 
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], 
+            attribution: '&copy; Google Maps'
+        });
+
+        var baseMaps = {
+            "Google Street Map": googleStreets,
+            "Google Hybrid Satellite": googleHybrid
+        };
+
+        var overlayMaps = {};
+        var layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+
+        // Data Layers Registry
+        var tiffLayersConfig = [
+            { label: "Cropping Intensity (2017-18)", url: "West_Bengal_Cropping_Intensity_2017_18.tif", defaultOn: true },
+            { label: "Cropping Intensity (2018-19)", url: "West_Bengal_Cropping_Intensity_2018_19.tif", defaultOn: false },
+            { label: "Cropping Intensity (2019-20)", url: "West_Bengal_Cropping_Intensity_2019_20.tif", defaultOn: false },
+            { label: "Cropping Intensity (2020-21)", url: "West_Bengal_Cropping_Intensity_2020_21.tif", defaultOn: false },
+            { label: "Cropping Intensity (2021-22)", url: "West_Bengal_Cropping_Intensity_2021_22.tif", defaultOn: false },
+            { label: "Cropping Intensity (2022-23)", url: "West_Bengal_Cropping_Intensity_2022_23.tif", defaultOn: false },
+            { label: "Cropping Intensity (2023-24)", url: "West_Bengal_Cropping_Intensity_2023_24.tif", defaultOn: false },
+            { label: "Cropping Intensity (2024-25)", url: "West_Bengal_Cropping_Intensity_2024_25.tif", defaultOn: false },
+            { label: "Cropping Intensity (2025-26)", url: "West_Bengal_Cropping_Intensity_2025_26.tif", defaultOn: false }
+        ];
+
+        // Determine which specific layer title is loading to show the user exactly what's happening
+        var activeTargetTitle = savedLayerLabel || tiffLayersConfig.find(c => c.defaultOn).label;
+        showLoader("Dayamoy Ghosh EE: Please wait : Loading " + activeTargetTitle, "Downloading array buffers and computing raster pixels...");
+
+        function getPixelColor(values, noDataValue) {
+            var value = Array.isArray(values) ? values[0] : values;
+            if (value === 0 || isNaN(value) || value === noDataValue) return 'transparent';
+            
+            if (value === 1) return '#f1c40f'; // Single Crop
+            if (value === 2) return '#27ae60'; // Double Crop
+            if (value === 3) return '#1e4620'; // Triple Crop
+            
+            return 'transparent';
+        }
+
+        // Keep track of total operational layers processed to dismiss the global spinner safely
+        var layersLoadedCount = 0;
+
+        // 3. Process Config Layer Arrays Loops
+        tiffLayersConfig.forEach(function(config) {
+            fetch(config.url)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error("HTTP error status: " + response.status + " fetching " + config.url);
+                    }
+                    return response.arrayBuffer();
+                })
+                .then(arrayBuffer => {
+                    parseGeoraster(arrayBuffer).then(georaster => {
+                        var geoRasterLayer = new GeoRasterLayer({
+                            georaster: georaster,
+                            opacity: 0.8,
+                            pixelValuesToColorFn: function(values) {
+                                return getPixelColor(values, georaster.noDataValue);
+                            },
+                            resolution: 64
+                        });
+
+                        var shouldBeActive = savedLayerLabel ? (savedLayerLabel === config.label) : config.defaultOn;
+
+                        if (shouldBeActive) {
+                            geoRasterLayer.addTo(map);
+                            if (!savedZoom) {
+                                map.fitBounds(geoRasterLayer.getBounds());
+                            }
+                            // Active target layer rendered successfully -> clear screen loader overlay
+                            hideLoader();
+                        }
+
+                        layerControl.addOverlay(geoRasterLayer, config.label);
+                        checkAllFinished();
+                    });
+                })
+                .catch(error => {
+                    console.error("Layer loading failure:", config.label, error);
+                    var fallbackLayer = L.layerGroup([]);
+                    layerControl.addOverlay(fallbackLayer, config.label + " ⚠️ (File Missing)");
+                    
+                    var shouldBeActive = savedLayerLabel ? (savedLayerLabel === config.label) : config.defaultOn;
+                    if (shouldBeActive) { hideLoader(); } // Break loop safety blocks
+                    checkAllFinished();
+                });
+        });
+
+        function checkAllFinished() {
+            layersLoadedCount++;
+            if (layersLoadedCount === tiffLayersConfig.length) {
+                // Double protection fallback mechanism to clear panel if anything mismatched
+                hideLoader();
+            }
+        }
+
+        // 4. SMART RELOAD LOGIC: Intercept checkbox interaction and track camera states
+        map.on('overlayadd', function(e) {
+            var isTiffLayer = tiffLayersConfig.some(c => c.label === e.name);
+
+            if (isTiffLayer) {
+                if (savedLayerLabel !== e.name) {
+                    var center = map.getCenter();
+                    localStorage.setItem("activeTiffLayer", e.name);
+                    localStorage.setItem("mapLat", center.lat);
+                    localStorage.setItem("mapLng", center.lng);
+                    localStorage.setItem("mapZoom", map.getZoom());
+                    
+                    // Show indicator overlay immediately before trigger execution reload sequence
+                    showLoader("Switching Layer to " + e.name, "Refreshing workspace session properties...");
+                    location.reload();
+                }
+            }
+        });
+
+        // 5. Setup Clean Cropping Intensity Legend
+        var legend = L.control({position: 'bottomright'});
+        legend.onAdd = function (map) {
+            var div = L.DomUtil.create('div', 'legend');
+            div.innerHTML = '<h4>Cropping Intensity</h4>' +
+                            '<i style="background: #f1c40f"></i> Single Crop<br>' +
+                            '<i style="background: #27ae60"></i> Double Crop<br>' +
+                            '<i style="background: #1e4620"></i> Triple Crop';
+            return div;
+        };
+        legend.addTo(map);
+
+        // 6. Interactivity Map Tools
+        function plotCustomMarker() {
+            var lat = parseFloat(document.getElementById('input-lat').value);
+            var lng = parseFloat(document.getElementById('input-lng').value);
+
+            if (isNaN(lat) || isNaN(lng)) {
+                alert("Please type valid numbers for both Latitude and Longitude.");
+                return;
+            }
+
+            if (searchMarker) { map.removeLayer(searchMarker); }
+
+            searchMarker = L.marker([lat, lng]).addTo(map)
+                .bindPopup("<b>Target Location</b><br>Lat: " + lat + "<br>Lng: " + lng)
+                .openPopup();
+
+            map.setView([lat, lng], 12);
+        }
+
+        var coordsDisplay = document.getElementById('mouse-coords');
+        map.on('mousemove', function(e) {
+            var currentLat = e.latlng.lat.toFixed(5);
+            var currentLng = e.latlng.lng.toFixed(5);
+            coordsDisplay.innerHTML = "Lat: " + currentLat + ", Lng: " + currentLng;
+        });
+
+    </script>
+</body>
+</html>

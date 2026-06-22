@@ -65,6 +65,16 @@
         .year-select-box { margin: 8px 0; }
         .year-select-box select { width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #ccc; font-weight: bold; }
 
+        .action-btn { width: 100%; padding: 8px; margin: 5px 0; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .run-btn { background: #28a745; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .run-btn:hover { background: #218838; }
+
+        /* Progress Bar Styles */
+        .progress-container { margin: 8px 0; display: none; }
+        .progress-bar-bg { width: 100%; background-color: #e0e0e0; border-radius: 4px; height: 12px; overflow: hidden; }
+        .progress-bar-fill { width: 0%; height: 100%; background-color: #007bff; transition: width 0.1s ease; }
+        .progress-label { font-size: 11px; font-weight: bold; color: #333; text-align: center; margin-top: 3px; }
+
         .crop-stat { margin: 5px 0; padding: 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white; }
         .s-crop { background: #f1c40f; color: black; }
         .d-crop { background: #27ae60; }
@@ -104,7 +114,7 @@
 <div id="map"></div>
 
 <div id="analysis-panel">
-    <b style="font-size: 13px;">Crop Area Analysis (Ha)</b>
+    <b style="font-size: 13px;">Crop Area Analysis (Ha)by Dayamoy Ghosh Executive Engineer WRIDD</b>
     <div class="year-select-box">
         <label for="year-select" style="font-size:11px; font-weight:bold; color:#555;">Analysis Year:</label>
         <select id="year-select" onchange="handleYearChange()">
@@ -119,7 +129,18 @@
             <option value="2025_26">2025-26</option>
         </select>
     </div>
+    
+    <button class="action-btn run-btn" id="start-calc-trigger" onclick="initiateCalculationWorkflow()">▶ Start Crop Area Calculation</button>
+    
     <hr>
+    
+    <div class="progress-container" id="calc-progress-box">
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="calc-progress-fill"></div>
+        </div>
+        <div class="progress-label" id="calc-progress-text">Initializing parameters...</div>
+    </div>
+
     <div class="crop-stat s-crop">Single: <span id="val1">0.00</span> Ha</div>
     <div class="crop-stat d-crop">Double: <span id="val2">0.00</span> Ha</div>
     <div class="crop-stat t-crop">Triple: <span id="val3">0.00</span> Ha</div>
@@ -196,7 +217,9 @@
         drawnItems.clearLayers();
         drawnItems.addLayer(e.layer);
         activeLayerForCalc = e.layer;
-        runDynamicYearlyCalculation();
+        
+        resetCropDisplayFields();
+        document.getElementById('analysis-panel').style.display = 'block';
     });
 
     const geojsonConfig = [
@@ -220,7 +243,6 @@
                 },
                 style: (feature) => { return { color: config.color, weight: 2, fillOpacity: 0.1 }; },
                 onEachFeature: (feature, layer) => {
-                    // Cache original styles directly within the layer structure for programmatic restoration
                     layer.options.originalColor = config.color;
                     layer.options.originalWeight = 2;
                     layer.options.originalFillOpacity = 0.1;
@@ -346,23 +368,57 @@
         }
     }
 
+    function resetCropDisplayFields() {
+        document.getElementById('val1').innerText = "0.00";
+        document.getElementById('val2').innerText = "0.00";
+        document.getElementById('val3').innerText = "0.00";
+        document.getElementById('val0').innerText = "0.00";
+        document.getElementById('valTotal').innerText = "0.00";
+    }
+
     async function handleYearChange() {
+        resetCropDisplayFields();
         if (!activeLayerForCalc) {
             const currentYear = document.getElementById('year-select').value;
             await loadTifForYear(currentYear);
-            return;
         }
-        runDynamicYearlyCalculation();
     }
 
-    async function runDynamicYearlyCalculation() {
-        if (!activeLayerForCalc) return;
-        const selectedYear = document.getElementById('year-select').value;
+    // Immediate Execution Trigger Pipeline (Removes Lag from DOM updates)
+    function initiateCalculationWorkflow() {
+        if (!activeLayerForCalc) {
+            alert("Please draw an operational area polygon or upload a KML boundary first.");
+            return;
+        }
         
-        const isLoaded = await loadTifForYear(selectedYear);
-        if (!isLoaded || !calcData) return;
+        // Force the browser to render the progress container frame right away
+        const progressBox = document.getElementById('calc-progress-box');
+        const progressFill = document.getElementById('calc-progress-fill');
+        const progressText = document.getElementById('calc-progress-text');
+        
+        progressBox.style.display = 'block';
+        progressFill.style.width = '0%';
+        progressText.innerText = "Connecting to TIF Engine... Please wait.";
 
-        document.getElementById('analysis-panel').style.display = 'block';
+        // Defer heavy fetching logic to the next event frame so UI registers visual changes
+        setTimeout(() => {
+            runDynamicYearlyCalculation();
+        }, 50);
+    }
+
+    // Modern Chunked Asynchronous Raster Processor Engine
+    async function runDynamicYearlyCalculation() {
+        const selectedYear = document.getElementById('year-select').value;
+        const isLoaded = await loadTifForYear(selectedYear);
+        
+        if (!isLoaded || !calcData) {
+            document.getElementById('calc-progress-box').style.display = 'none';
+            return;
+        }
+
+        const progressFill = document.getElementById('calc-progress-fill');
+        const progressText = document.getElementById('calc-progress-text');
+
         let c0 = 0, c1 = 0, c2 = 0, c3 = 0;
         const b = activeLayerForCalc.getBounds();
         const rx = (calcBbox[2] - calcBbox[0]) / calcWidth;
@@ -372,26 +428,53 @@
         let sy = Math.max(0, Math.floor((calcBbox[3] - b.getNorth()) / ry));
         let ey = Math.min(calcHeight, Math.ceil((calcBbox[3] - b.getSouth()) / ry));
         
-        for (let y = sy; y < ey; y++) {
-            for (let x = sx; x < ex; x++) {
-                const idx = y * calcWidth + x;
-                const v = calcData[0][idx];
-                let lat = calcBbox[3] - (y * ry);
-                let lng = calcBbox[0] + (x * rx);
-                if (isPointInPoly(L.latLng(lat, lng), activeLayerForCalc)) {
-                    if (v === 1) c1++; 
-                    else if (v === 2) c2++; 
-                    else if (v === 3) c3++;
-                    else c0++;
+        let currentY = sy;
+        const totalRows = Math.max(1, ey - sy);
+
+        function processRowChunk() {
+            let iterations = 0;
+            const maxIterationsPerFrame = 40; 
+
+            while (currentY < ey && iterations < maxIterationsPerFrame) {
+                for (let x = sx; x < ex; x++) {
+                    const idx = currentY * calcWidth + x;
+                    const v = calcData[0][idx];
+                    let lat = calcBbox[3] - (currentY * ry);
+                    let lng = calcBbox[0] + (x * rx);
+                    if (isPointInPoly(L.latLng(lat, lng), activeLayerForCalc)) {
+                        if (v === 1) c1++; 
+                        else if (v === 2) c2++; 
+                        else if (v === 3) c3++;
+                        else c0++;
+                    }
                 }
+                currentY++;
+                iterations++;
+            }
+
+            const completedRows = currentY - sy;
+            const percentage = Math.min(100, Math.floor((completedRows / totalRows) * 100));
+            progressFill.style.width = percentage + '%';
+            progressText.innerText = `System calculating... ${percentage}%`;
+
+            if (currentY < ey) {
+                requestAnimationFrame(processRowChunk);
+            } else {
+                const sHa = c1 * 0.09, dHa = c2 * 0.09, tHa = c3 * 0.09, oHa = c0 * 0.09;
+                document.getElementById('val1').innerText = sHa.toFixed(2);
+                document.getElementById('val2').innerText = dHa.toFixed(2);
+                document.getElementById('val3').innerText = tHa.toFixed(2);
+                document.getElementById('val0').innerText = oHa.toFixed(2);
+                document.getElementById('valTotal').innerText = (sHa + dHa + tHa + oHa).toFixed(2);
+                
+                progressText.innerText = "Calculation Complete!";
+                setTimeout(() => {
+                    document.getElementById('calc-progress-box').style.display = 'none';
+                }, 1000);
             }
         }
-        const sHa = c1 * 0.09, dHa = c2 * 0.09, tHa = c3 * 0.09, oHa = c0 * 0.09;
-        document.getElementById('val1').innerText = sHa.toFixed(2);
-        document.getElementById('val2').innerText = dHa.toFixed(2);
-        document.getElementById('val3').innerText = tHa.toFixed(2);
-        document.getElementById('val0').innerText = oHa.toFixed(2);
-        document.getElementById('valTotal').innerText = (sHa + dHa + tHa + oHa).toFixed(2);
+        
+        requestAnimationFrame(processRowChunk);
     }
 
     function goToCoords() {
@@ -417,7 +500,9 @@
                             layer.setStyle({ color: '#ff0000', weight: 4, fillOpacity: 0.3 });
                             drawnItems.addLayer(layer);
                             activeLayerForCalc = layer;
-                            runDynamicYearlyCalculation();
+                            
+                            resetCropDisplayFields();
+                            document.getElementById('analysis-panel').style.display = 'block';
                         }
                     });
                 }).addTo(drawnItems);
@@ -443,7 +528,6 @@
     function performSearch() {
         const q = document.getElementById('search-input').value.trim().toLowerCase();
         
-        // Clear past highlights safely by loading stored config style options
         if (lastHighlighted && lastHighlighted.setStyle) {
             lastHighlighted.setStyle({
                 color: lastHighlighted.options.originalColor || '#00fbff',
@@ -459,7 +543,6 @@
             return;
         }
 
-        // Restrict search targets exclusively to Mouza Boundary configurations
         searchResults = allLayers.filter(obj => {
             const isTargetLayer = obj.configName === 'Mouza Boundary P-I' || obj.configName === 'Mouza Boundary P-II';
             if (!isTargetLayer) return false;
@@ -482,7 +565,6 @@
     function cycleResults(dir) {
         if (searchResults.length === 0) return;
         
-        // Reset properties of previous selection
         if (lastHighlighted && lastHighlighted.setStyle) {
             lastHighlighted.setStyle({ 
                 color: lastHighlighted.options.originalColor, 
@@ -494,12 +576,10 @@
         currentIndex = (currentIndex + dir + searchResults.length) % searchResults.length;
         const target = searchResults[currentIndex];
         
-        // Force structural visibility of parent LayerGroup
         if (!map.hasLayer(target.group)) {
             map.addLayer(target.group);
         }
         
-        // Apply high contrast highlighting style to the polygon
         if (target.layer.setStyle) {
             target.layer.setStyle({ 
                 color: '#ffeb3b', 

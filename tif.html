@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>West Bengal Spatial Data (Multi-Year)</title>
+    <title>Web map for Crop Analysis by Dayamoy Ghosh (Multi-Year)</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
@@ -19,25 +19,30 @@
         .legend i { width: 16px; height: 16px; float: left; margin-right: 8px; opacity: 0.9; border: 1px solid #ccc; }
         .legend h4 { margin: 5px 0; font-size: 14px; }
         
-        /* Coordinate Picker Input Panel */
-        #coordinate-finder {
+        /* Unified Control Box (Coordinates + Mouza Finder) */
+        #search-container {
             position: absolute; top: 10px; left: 55px; z-index: 1000;
-            background: white; padding: 10px; border-radius: 5px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2); display: flex; gap: 6px; align-items: center;
+            background: white; padding: 12px; border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 8px;
+            width: 320px; /* Slightly wider to fit descriptive dropdown strings */
         }
-        #coordinate-finder input { width: 90px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; }
-        #coordinate-finder button { padding: 5px 10px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        .search-row { display: flex; gap: 6px; align-items: center; }
+        #search-container input { flex: 1; padding: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; min-width: 0; }
+        #search-container button { padding: 5px 10px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; white-space: nowrap; }
         
         .btn-go { background: #27ae60; }
         .btn-go:hover { background: #219150; }
+        .btn-mouza { background: #2980b9; }
+        .btn-mouza:hover { background: #2471a3; }
 
-        /* Dynamic Mouse Hover Coordinates Widget */
+        /* Dynamic Mouse Hover Coordinates & Attribute Info Widget */
         #mouse-coords {
             position: absolute; bottom: 10px; left: 10px; z-index: 1000;
-            background: rgba(255, 255, 255, 0.85); padding: 4px 8px; border-radius: 4px;
-            font-size: 12px; font-family: monospace; border: 1px solid #bbb; pointer-events: none;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            background: rgba(255, 255, 255, 0.95); padding: 8px 12px; border-radius: 4px;
+            font-size: 12px; font-family: Arial, sans-serif; border: 1px solid #bbb; pointer-events: none;
+            box-shadow: 0 0 10px rgba(0,0,0,0.15); line-height: 1.4; max-width: 250px;
         }
+        .hud-title { font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 4px; padding-bottom: 2px; color: #2c3e50; }
 
         /* Full Screen Loader Indicator overlay */
         #loading-overlay {
@@ -68,16 +73,30 @@
 
     <div id="loading-overlay">
         <div class="spinner"></div>
-        <div id="loading-text">Loading GeoTIFF Data Layer...<br><span style="font-size:12px; color:#7f8c8d; font-weight:normal;">Rendering high-resolution spatial details. Please wait.</span></div>
+        <div id="loading-text">Loading Workspace Layers...<br><span style="font-size:12px; color:#7f8c8d; font-weight:normal;">Rendering high-resolution spatial details. Please wait.</span></div>
     </div>
 
-    <div id="coordinate-finder">
-        <input type="number" id="input-lat" placeholder="Latitude" step="any">
-        <input type="number" id="input-lng" placeholder="Longitude" step="any">
-        <button class="btn-go" onclick="plotCustomMarker()">Go to Point</button>
+    <!-- Unified Sidebar Search Toolkit -->
+    <div id="search-container">
+        <!-- Lat Lng Plotter -->
+        <div class="search-row">
+            <input type="number" id="input-lat" placeholder="Latitude" step="any">
+            <input type="number" id="input-lng" placeholder="Longitude" step="any">
+            <button class="btn-go" onclick="plotCustomMarker()">Go</button>
+        </div>
+        <!-- Mouza Boundary Finder with HTML5 Datalist Dropdown capability -->
+        <div class="search-row">
+            <input type="text" id="input-mouza" list="mouza-datalist" placeholder="Type Mouza Name...">
+            <datalist id="mouza-datalist"></datalist>
+            <button class="btn-mouza" onclick="searchMouza()">Find Mouza</button>
+        </div>
     </div>
 
-    <div id="mouse-coords">Lat: 0.00000, Lng: 0.00000</div>
+    <!-- Dynamic Attribute HUD Overlay -->
+    <div id="mouse-coords">
+        <div class="hud-title">Map Coordinates</div>
+        Lat: 0.00000, Lng: 0.00000
+    </div>
 
     <div id="map"></div>
 
@@ -89,7 +108,6 @@
         var loader = document.getElementById('loading-overlay');
         var loaderText = document.getElementById('loading-text');
 
-        // Helper functions to control indicator
         function showLoader(message, submessage) {
             loaderText.innerHTML = message + '<br><span style="font-size:12px; color:#7f8c8d; font-weight:normal;">' + submessage + '</span>';
             loader.style.display = 'flex';
@@ -97,32 +115,28 @@
         }
         function hideLoader() {
             loader.style.opacity = '0';
-            setTimeout(function() { loader.style.display = 'none'; }, 300); // smooth hide transition
+            setTimeout(function() { loader.style.display = 'none'; }, 300);
         }
 
-        // 1. Retrieve the saved session states from local storage
         var savedLayerLabel = localStorage.getItem("activeTiffLayer");
         var savedLat = localStorage.getItem("mapLat");
         var savedLng = localStorage.getItem("mapLng");
         var savedZoom = localStorage.getItem("mapZoom");
 
-        // 2. Initialize Map
         var initialCenter = (savedLat && savedLng) ? [parseFloat(savedLat), parseFloat(savedLng)] : [22.9868, 87.8550];
         var initialZoom = savedZoom ? parseInt(savedZoom) : 7;
 
         var map = L.map('map').setView(initialCenter, initialZoom);
         var searchMarker = null;
+        var geojsonFeaturesArray = []; 
+        var highlightedSearchLayer = null; 
 
         var googleStreets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
-            maxZoom: 20, 
-            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], 
-            attribution: '&copy; Google Maps'
+            maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], attribution: '&copy; Google Maps'
         }).addTo(map); 
 
         var googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-            maxZoom: 20, 
-            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], 
-            attribution: '&copy; Google Maps'
+            maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], attribution: '&copy; Google Maps'
         });
 
         var baseMaps = {
@@ -133,7 +147,6 @@
         var overlayMaps = {};
         var layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
 
-        // Data Layers Registry
         var tiffLayersConfig = [
             { label: "Cropping Intensity (2017-18)", url: "West_Bengal_Cropping_Intensity_2017_18.tif", defaultOn: true },
             { label: "Cropping Intensity (2018-19)", url: "West_Bengal_Cropping_Intensity_2018_19.tif", defaultOn: false },
@@ -146,98 +159,236 @@
             { label: "Cropping Intensity (2025-26)", url: "West_Bengal_Cropping_Intensity_2025_26.tif", defaultOn: false }
         ];
 
-        // Determine which specific layer title is loading to show the user exactly what's happening
         var activeTargetTitle = savedLayerLabel || tiffLayersConfig.find(c => c.defaultOn).label;
-        showLoader("Dayamoy Ghosh EE: Please wait : Loading " + activeTargetTitle, "Downloading array buffers and computing raster pixels...");
+        showLoader("Please wait: Dayamoy Ghosh Executive Engineer", "Loading GeoTIFF and Mouza Vector overlays...");
 
         function getPixelColor(values, noDataValue) {
             var value = Array.isArray(values) ? values[0] : values;
             if (value === 0 || isNaN(value) || value === noDataValue) return 'transparent';
-            
-            if (value === 1) return '#f1c40f'; // Single Crop
-            if (value === 2) return '#27ae60'; // Double Crop
-            if (value === 3) return '#1e4620'; // Triple Crop
-            
+            if (value === 1) return '#f1c40f'; 
+            if (value === 2) return '#27ae60'; 
+            if (value === 3) return '#1e4620'; 
             return 'transparent';
         }
 
-        // Keep track of total operational layers processed to dismiss the global spinner safely
-        var layersLoadedCount = 0;
+        var defaultGeoJsonStyle = {
+            color: "#3498db", weight: 2, opacity: 0.8, fillColor: "#3498db", fillOpacity: 0.15
+        };
+        
+        var hoverGeoJsonStyle = {
+            color: "#e74c3c", weight: 3, opacity: 1.0, fillColor: "#e74c3c", fillOpacity: 0.35
+        };
 
-        // 3. Process Config Layer Arrays Loops
+        var coordsDisplay = document.getElementById('mouse-coords');
+        var datalistElement = document.getElementById('mouza-datalist');
+
+        function onEachMouzaFeature(feature, layer) {
+            var props = feature.properties;
+            
+            // Generate a uniquely distinct descriptive label to sort duplicates
+            var uniqueLabel = props.MOUZA + " (Block: " + (props.BLOCK || "N/A") + ", Dist: " + (props.district || "N/A") + ")";
+            
+            // Save inside tracking array
+            geojsonFeaturesArray.push({ 
+                feature: feature, 
+                layer: layer, 
+                uniqueLabel: uniqueLabel,
+                mouzaCleanName: props.MOUZA ? props.MOUZA.trim().toLowerCase() : ""
+            });
+
+            // Dynamically inject into option box menu elements list
+            var option = document.createElement('option');
+            option.value = uniqueLabel; 
+            datalistElement.appendChild(option);
+
+            layer.on({
+                mousemove: function(e) {
+                    var currentLat = e.latlng.lat.toFixed(5);
+                    var currentLng = e.latlng.lng.toFixed(5);
+                    
+                    if (layer !== highlightedSearchLayer) {
+                        layer.setStyle(hoverGeoJsonStyle);
+                    }
+
+                    coordsDisplay.innerHTML = 
+                        '<div class="hud-title">Mouza Attributes</div>' +
+                        '<b>District:</b> ' + (props.district || 'N/A') + '<br>' +
+                        '<b>Block:</b> ' + (props.BLOCK || 'N/A') + '<br>' +
+                        '<b>Mouza:</b> ' + (props.MOUZA || 'N/A') + '<br>' +
+                        '<b>Area (MA):</b> ' + (props.MA || '0') + ' Ha<br>' +
+                        '<span style="font-family:monospace; font-size:11px; color:#7f8c8d;">Lat: ' + currentLat + ', Lng: ' + currentLng + '</span>';
+                },
+                mouseout: function(e) {
+                    if (layer !== highlightedSearchLayer) {
+                        layer.setStyle(defaultGeoJsonStyle);
+                    }
+                    var currentLat = e.latlng ? e.latlng.lat.toFixed(5) : "0.00000";
+                    var currentLng = e.latlng ? e.latlng.lng.toFixed(5) : "0.00000";
+                    coordsDisplay.innerHTML = '<div class="hud-title">Map Coordinates</div>Lat: ' + currentLat + ', Lng: ' + currentLng;
+                }
+            });
+        }
+
+        function loadGeoJsonLayer(url, layerName) {
+            return fetch(url)
+                .then(res => { if(!res.ok) throw new Error(); return res.json(); })
+                .then(data => {
+                    var geoLayer = L.geoJSON(data, {
+                        style: defaultGeoJsonStyle,
+                        onEachFeature: onEachMouzaFeature
+                    }).addTo(map);
+                    layerControl.addOverlay(geoLayer, layerName);
+                })
+                .catch(err => {
+                    console.error("Failed to load file " + url);
+                    var fallback = L.layerGroup([]);
+                    layerControl.addOverlay(fallback, layerName + " ⚠️ (Missing)");
+                });
+        }
+
+        var layersLoadedCount = 0;
+        var totalExpectedLayers = tiffLayersConfig.length;
+
         tiffLayersConfig.forEach(function(config) {
             fetch(config.url)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error("HTTP error status: " + response.status + " fetching " + config.url);
-                    }
-                    return response.arrayBuffer();
-                })
+                .then(response => { if (!response.ok) throw new Error(); return response.arrayBuffer(); })
                 .then(arrayBuffer => {
                     parseGeoraster(arrayBuffer).then(georaster => {
                         var geoRasterLayer = new GeoRasterLayer({
-                            georaster: georaster,
-                            opacity: 0.8,
-                            pixelValuesToColorFn: function(values) {
-                                return getPixelColor(values, georaster.noDataValue);
-                            },
-                            resolution: 64
+                            georaster: georaster, opacity: 0.8, resolution: 64,
+                            pixelValuesToColorFn: values => getPixelColor(values, georaster.noDataValue)
                         });
 
-                        var shouldBeActive = savedLayerLabel ? (savedLayerLabel === config.label) : config.defaultOn;
-
-                        if (shouldBeActive) {
+                        if (savedLayerLabel ? (savedLayerLabel === config.label) : config.defaultOn) {
                             geoRasterLayer.addTo(map);
-                            if (!savedZoom) {
-                                map.fitBounds(geoRasterLayer.getBounds());
-                            }
-                            // Active target layer rendered successfully -> clear screen loader overlay
-                            hideLoader();
+                            if (!savedZoom) map.fitBounds(geoRasterLayer.getBounds());
                         }
-
                         layerControl.addOverlay(geoRasterLayer, config.label);
                         checkAllFinished();
                     });
                 })
                 .catch(error => {
-                    console.error("Layer loading failure:", config.label, error);
                     var fallbackLayer = L.layerGroup([]);
                     layerControl.addOverlay(fallbackLayer, config.label + " ⚠️ (File Missing)");
-                    
-                    var shouldBeActive = savedLayerLabel ? (savedLayerLabel === config.label) : config.defaultOn;
-                    if (shouldBeActive) { hideLoader(); } // Break loop safety blocks
                     checkAllFinished();
                 });
         });
 
-        function checkAllFinished() {
-            layersLoadedCount++;
-            if (layersLoadedCount === tiffLayersConfig.length) {
-                // Double protection fallback mechanism to clear panel if anything mismatched
+        Promise.all([
+            loadGeoJsonLayer("mouzabound.geojson", "Mouza Boundaries 1"),
+            loadGeoJsonLayer("mouzabound2.geojson", "Mouza Boundaries 2")
+        ]).then(() => {
+            checkAllFinished(true);
+        });
+
+        function checkAllFinished(isVectorCall = false) {
+            if(!isVectorCall) layersLoadedCount++;
+            if (layersLoadedCount === totalExpectedLayers) {
                 hideLoader();
             }
         }
 
-        // 4. SMART RELOAD LOGIC: Intercept checkbox interaction and track camera states
+        // --- Multi-Match Smart Lookup Engine Core ---
+        function searchMouza() {
+            var inputVal = document.getElementById('input-mouza').value.trim();
+            if (!inputVal) {
+                alert("Please enter a Mouza name to search.");
+                return;
+            }
+
+            if (highlightedSearchLayer) {
+                highlightedSearchLayer.setStyle(defaultGeoJsonStyle);
+                highlightedSearchLayer = null;
+            }
+
+            var match = null;
+            var searchLower = inputVal.toLowerCase();
+
+            // 1. Precise Check: See if they selected a specific variant explicitly from our dropdown menu structure
+            match = geojsonFeaturesArray.find(item => item.uniqueLabel.toLowerCase() === searchLower);
+
+            // 2. Fallback check: If they just typed the raw string name (e.g., "Shankar Pur") without choosing the dropdown structure
+            if (!match) {
+                var occurrences = geojsonFeaturesArray.filter(item => item.mouzaCleanName === searchLower);
+                
+                if (occurrences.length === 0) {
+                    alert("Mouza '" + inputVal + "' not found in active data catalogs.");
+                    return;
+                } else if (occurrences.length === 1) {
+                    match = occurrences[0]; // Exactly one match found cleanly
+                } else {
+                    // Critical State: Multiple duplicate candidates match the raw text. 
+                    // Tell user to leverage the dropdown items to confirm which specific location boundary they require.
+                    var blocksList = occurrences.map(o => "  • " + o.uniqueLabel).join("\n");
+                    alert("Multiple Mouzas found with that name!\n\nPlease select the correct option from the dropdown menu list:\n\n" + blocksList);
+                    return;
+                }
+            }
+
+            // Proceed to fit and zoom precisely onto target elements
+            if (match) {
+                var layer = match.layer;
+                var props = match.feature.properties;
+
+                highlightedSearchLayer = layer;
+                layer.setStyle({
+                    color: "#d35400", weight: 4, opacity: 1.0, fillColor: "#e67e22", fillOpacity: 0.4
+                });
+
+                var bounds = layer.getBounds();
+                map.fitBounds(bounds, { maxZoom: 14 });
+
+                var popupContent = 
+                    "<b>Mouza Found</b><br>" +
+                    "<b>District:</b> " + (props.district || 'N/A') + "<br>" +
+                    "<b>Block:</b> " + (props.BLOCK || 'N/A') + "<br>" +
+                    "<b>Mouza:</b> " + (props.MOUZA || 'N/A') + "<br>" +
+                    "<b>Area:</b> " + (props.MA || '0') + " Ha";
+
+                layer.bindPopup(popupContent).openPopup();
+            }
+        }
+
+        function plotCustomMarker() {
+            var lat = parseFloat(document.getElementById('input-lat').value);
+            var lng = parseFloat(document.getElementById('input-lng').value);
+
+            if (isNaN(lat) || isNaN(lng)) {
+                alert("Please type valid numeric values for Latitude and Longitude.");
+                return;
+            }
+
+            if (searchMarker) { map.removeLayer(searchMarker); }
+
+            searchMarker = L.marker([lat, lng]).addTo(map)
+                .bindPopup("<b>Target Location Coordinates</b><br>Lat: " + lat + "<br>Lng: " + lng)
+                .openPopup();
+
+            map.setView([lat, lng], 13);
+        }
+
         map.on('overlayadd', function(e) {
             var isTiffLayer = tiffLayersConfig.some(c => c.label === e.name);
-
-            if (isTiffLayer) {
-                if (savedLayerLabel !== e.name) {
-                    var center = map.getCenter();
-                    localStorage.setItem("activeTiffLayer", e.name);
-                    localStorage.setItem("mapLat", center.lat);
-                    localStorage.setItem("mapLng", center.lng);
-                    localStorage.setItem("mapZoom", map.getZoom());
-                    
-                    // Show indicator overlay immediately before trigger execution reload sequence
-                    showLoader("Switching Layer to " + e.name, "Refreshing workspace session properties...");
-                    location.reload();
-                }
+            if (isTiffLayer && savedLayerLabel !== e.name) {
+                var center = map.getCenter();
+                localStorage.setItem("activeTiffLayer", e.name);
+                localStorage.setItem("mapLat", center.lat);
+                localStorage.setItem("mapLng", center.lng);
+                localStorage.setItem("mapZoom", map.getZoom());
+                
+                showLoader("Switching Layer to " + e.name, "Refreshing workspace session properties...");
+                location.reload();
             }
         });
 
-        // 5. Setup Clean Cropping Intensity Legend
+        map.on('mousemove', function(e) {
+            if (coordsDisplay.innerHTML.includes("Map Coordinates")) {
+                var currentLat = e.latlng.lat.toFixed(5);
+                var currentLng = e.latlng.lng.toFixed(5);
+                coordsDisplay.innerHTML = '<div class="hud-title">Map Coordinates</div>Lat: ' + currentLat + ', Lng: ' + currentLng;
+            }
+        });
+
         var legend = L.control({position: 'bottomright'});
         legend.onAdd = function (map) {
             var div = L.DomUtil.create('div', 'legend');
@@ -248,33 +399,6 @@
             return div;
         };
         legend.addTo(map);
-
-        // 6. Interactivity Map Tools
-        function plotCustomMarker() {
-            var lat = parseFloat(document.getElementById('input-lat').value);
-            var lng = parseFloat(document.getElementById('input-lng').value);
-
-            if (isNaN(lat) || isNaN(lng)) {
-                alert("Please type valid numbers for both Latitude and Longitude.");
-                return;
-            }
-
-            if (searchMarker) { map.removeLayer(searchMarker); }
-
-            searchMarker = L.marker([lat, lng]).addTo(map)
-                .bindPopup("<b>Target Location</b><br>Lat: " + lat + "<br>Lng: " + lng)
-                .openPopup();
-
-            map.setView([lat, lng], 12);
-        }
-
-        var coordsDisplay = document.getElementById('mouse-coords');
-        map.on('mousemove', function(e) {
-            var currentLat = e.latlng.lat.toFixed(5);
-            var currentLng = e.latlng.lng.toFixed(5);
-            coordsDisplay.innerHTML = "Lat: " + currentLat + ", Lng: " + currentLng;
-        });
-
     </script>
 </body>
 </html>

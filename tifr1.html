@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web map by Dayamoy Ghosh EE </title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet-Geoman Toolbar CSS for Drawing & Measurement Tools -->
+    <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.14.2/dist/leaflet-geoman.css" />
+    
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; width: 100%; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 100%; }
+        
+        /* Unified Map Control Panels */
+        .legend {
+            background: white; padding: 10px; line-height: 18px; color: #333;
+            border-radius: 5px; box-shadow: 0 0 15px rgba(0,0,0,0.2); font-size: 13px;
+        }
+        .legend i { width: 16px; height: 16px; float: left; margin-right: 8px; opacity: 0.9; border: 1px solid #ccc; }
+        .legend h4 { margin: 5px 0; font-size: 14px; }
+        
+        /* Unified Control Box (Coordinates + Mouza Finder + File Loaders) */
+        #search-container {
+            position: absolute; top: 10px; left: 55px; z-index: 1000;
+            background: white; padding: 12px; border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 8px;
+            width: 320px;
+        }
+        .search-row { display: flex; gap: 6px; align-items: center; }
+        #search-container input[type="number"], 
+        #search-container input[type="text"] { flex: 1; padding: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; min-width: 0; }
+        #search-container button { padding: 5px 10px; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; white-space: nowrap; }
+        
+        .btn-go { background: #27ae60; }
+        .btn-go:hover { background: #219150; }
+        .btn-mouza { background: #2980b9; }
+        .btn-mouza:hover { background: #2471a3; }
+        
+        /* File Upload Styling */
+        .file-upload-section { border-top: 1px dashed #ccc; padding-top: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 6px; }
+        .file-upload-section label { font-weight: bold; color: #2c3e50; }
+        .file-upload-section input[type="file"] { font-size: 11px; }
+
+        /* Dynamic Mouse Hover Coordinates & Attribute Info Widget */
+        #mouse-coords {
+            position: absolute; bottom: 10px; left: 10px; z-index: 1000;
+            background: rgba(255, 255, 255, 0.95); padding: 8px 12px; border-radius: 4px;
+            font-size: 12px; font-family: Arial, sans-serif; border: 1px solid #bbb; pointer-events: none;
+            box-shadow: 0 0 10px rgba(0,0,0,0.15); line-height: 1.4; max-width: 250px;
+        }
+        .hud-title { font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 4px; padding-bottom: 2px; color: #2c3e50; }
+
+        /* Full Screen Loader Indicator overlay */
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 255, 255, 0.85);
+            z-index: 9999; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #27ae60;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        #loading-text {
+            font-size: 16px; font-weight: bold; color: #2c3e50; text-align: center; line-height: 1.5;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Custom Popup Styling for Attribute Data */
+        .popup-card { font-size: 12px; max-width: 290px; max-height: 250px; overflow-y: auto; }
+        .popup-card header { font-weight: bold; font-size: 13px; color: #16a085; border-bottom: 1px solid #2c3e50; padding-bottom: 4px; margin-bottom: 6px; }
+        .attribute-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .attribute-table td { padding: 3px 4px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+        .attribute-table td.prop-name { font-weight: bold; color: #34495e; width: 45%; }
+
+        /* Measurement Tool Popups */
+        .measurement-popup { font-size: 12px; font-weight: bold; line-height: 1.5; color: #2c3e50; }
+    </style>
+</head>
+<body>
+
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-text">Loading Workspace Layers...<br><span style="font-size:12px; color:#7f8c8d; font-weight:normal;">Rendering high-resolution spatial details. Please wait.</span></div>
+    </div>
+
+    <!-- Unified Sidebar Search Toolkit -->
+    <div id="search-container">
+        <!-- Lat Lng Plotter -->
+        <div class="search-row">
+            <input type="number" id="input-lat" placeholder="Latitude" step="any">
+            <input type="number" id="input-lng" placeholder="Longitude" step="any">
+            <button class="btn-go" onclick="plotCustomMarker()">Go</button>
+        </div>
+        <!-- Mouza Boundary Finder -->
+        <div class="search-row">
+            <input type="text" id="input-mouza" list="mouza-datalist" placeholder="Type Mouza Name...">
+            <datalist id="mouza-datalist"></datalist>
+            <button class="btn-mouza" onclick="searchMouza()">Find Mouza</button>
+        </div>
+        <!-- Multiple CSV Files Loader -->
+        <div class="file-upload-section">
+            <label for="csv-file-input">📁 Upload Scheme CSV Data (Multiple):</label>
+            <input type="file" id="csv-file-input" accept=".csv" multiple onchange="handleMultipleCSVUpload(event)">
+        </div>
+        <!-- Custom Local GeoJSON Loader -->
+        <div class="file-upload-section">
+            <label for="geojson-file-input">🌐 Upload Custom GeoJSON:</label>
+            <input type="file" id="geojson-file-input" accept=".json,.geojson" onchange="handleCustomGeoJSONUpload(event)">
+        </div>
+    </div>
+
+    <!-- Dynamic Attribute HUD Overlay -->
+    <div id="mouse-coords">
+        <div class="hud-title">Map Coordinates</div>
+        Lat: 0.00000, Lng: 0.00000
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
+    <script src="https://unpkg.com/georaster-layer-for-leaflet/dist/georaster-layer-for-leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- Turf.js Library for spatial geometry & distance/area measurements -->
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <!-- Leaflet Geoman JS for Drawing and Measuring -->
+    <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.14.2/dist/leaflet-geoman.min.js"></script>
+
+    <script>
+        var loader = document.getElementById('loading-overlay');
+        var loaderText = document.getElementById('loading-text');
+
+        function showLoader(message, submessage) {
+            loaderText.innerHTML = message + '<br><span style="font-size:12px; color:#7f8c8d; font-weight:normal;">' + submessage + '</span>';
+            loader.style.display = 'flex';
+            loader.style.opacity = '1';
+        }
+        function hideLoader() {
+            loader.style.opacity = '0';
+            setTimeout(function() { loader.style.display = 'none'; }, 300);
+        }
+
+        var savedLayerLabel = localStorage.getItem("activeTiffLayer");
+        var savedLat = localStorage.getItem("mapLat");
+        var savedLng = localStorage.getItem("mapLng");
+        var savedZoom = localStorage.getItem("mapZoom");
+
+        var initialCenter = (savedLat && savedLng) ? [parseFloat(savedLat), parseFloat(savedLng)] : [23.5, 87.8];
+        var initialZoom = savedZoom ? parseInt(savedZoom) : 8;
+
+        var map = L.map('map').setView(initialCenter, initialZoom);
+        var searchMarker = null;
+        var geojsonFeaturesArray = []; 
+        var highlightedSearchLayer = null; 
+
+        // --- Initialize Measurement & Drawing Toolbar ---
+        map.pm.addControls({
+            position: 'topleft',
+            drawCircleMarker: false,
+            drawMarker: true,
+            drawPolyline: true,
+            drawRectangle: true,
+            drawPolygon: true,
+            drawCircle: true,
+            editMode: true,
+            dragMode: true,
+            cutPolygon: true,
+            removalMode: true
+        });
+
+        // Event handler to calculate distance, perimeter, and area on shape creation
+        map.on('pm:create', function(e) {
+            var layer = e.layer;
+            var shape = e.shape;
+
+            if (shape === 'Line' || shape === 'Polyline') {
+                var geojson = layer.toGeoJSON();
+                var lengthKm = turf.length(geojson, { units: 'kilometers' });
+                var lengthMeters = (lengthKm * 1000).toFixed(2);
+                
+                var popupContent = '<div class="measurement-popup">' +
+                    '📏 <b>Distance Measurement</b><br>' +
+                    'Length: ' + lengthKm.toFixed(3) + ' km (' + lengthMeters + ' m)' +
+                    '</div>';
+                layer.bindPopup(popupContent).openPopup();
+            } 
+            else if (shape === 'Polygon' || shape === 'Rectangle' || shape === 'Circle') {
+                var geojson = layer.toGeoJSON();
+                var areaSqMeters = turf.area(geojson);
+                var areaHectares = (areaSqMeters / 10000).toFixed(3);
+                var areaAcres = (areaSqMeters * 0.000247105).toFixed(3);
+                
+                var perimeterKm = turf.length(geojson, { units: 'kilometers' });
+                var perimeterMeters = (perimeterKm * 1000).toFixed(2);
+
+                var popupContent = '<div class="measurement-popup">' +
+                    '📐 <b>Area & Perimeter Measurement</b><br>' +
+                    'Area: ' + areaHectares + ' Ha (' + areaAcres + ' Acres)<br>' +
+                    'Sq Meters: ' + areaSqMeters.toFixed(2) + ' m²<br>' +
+                    'Perimeter: ' + perimeterKm.toFixed(3) + ' km (' + perimeterMeters + ' m)' +
+                    '</div>';
+                layer.bindPopup(popupContent).openPopup();
+            }
+        });
+
+        var googleStreets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+            maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], attribution: '&copy; Google Maps'
+        }).addTo(map); 
+
+        var googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            maxZoom: 20, subdomains: ['mt0', 'mt1', 'mt2', 'mt3'], attribution: '&copy; Google Maps'
+        });
+
+        var baseMaps = {
+            "Google Street Map": googleStreets,
+            "Google Hybrid Satellite": googleHybrid
+        };
+
+        var overlayMaps = {};
+        var layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+
+        var tiffLayersConfig = [
+            { label: "Cropping Intensity (2017-18)", url: "West_Bengal_Cropping_Intensity_2017_18.tif", defaultOn: true },
+            { label: "Cropping Intensity (2018-19)", url: "West_Bengal_Cropping_Intensity_2018_19.tif", defaultOn: false },
+            { label: "Cropping Intensity (2019-20)", url: "West_Bengal_Cropping_Intensity_2019_20.tif", defaultOn: false },
+            { label: "Cropping Intensity (2020-21)", url: "West_Bengal_Cropping_Intensity_2020_21.tif", defaultOn: false },
+            { label: "Cropping Intensity (2021-22)", url: "West_Bengal_Cropping_Intensity_2021_22.tif", defaultOn: false },
+            { label: "Cropping Intensity (2022-23)", url: "West_Bengal_Cropping_Intensity_2022_23.tif", defaultOn: false },
+            { label: "Cropping Intensity (2023-24)", url: "West_Bengal_Cropping_Intensity_2023_24.tif", defaultOn: false },
+            { label: "Cropping Intensity (2024-25)", url: "West_Bengal_Cropping_Intensity_2024_25.tif", defaultOn: false },
+            { label: "Cropping Intensity (2025-26)", url: "West_Bengal_Cropping_Intensity_2025_26.tif", defaultOn: false }
+        ];
+
+        var schemeJsonConfigs = [
+            { url: 'wridd.geojson', name: 'WRIDD + WBADMIP I Scheme', color: '#FF4500' },
+            { url: 'WBADMIPII.geojson', name: 'WBADMIP PH-II Scheme', color: '#32CD32' },
+            { url: 'dg4.geojson', name: 'WBADMIP Proposed Scheme', color: '#0073ff' }
+        ];
+
+        showLoader("Please wait: Dayamoy Ghosh Executive Engineer", "Loading workspace layers & scheme datasets...");
+
+        function getPixelColor(values, noDataValue) {
+            var value = Array.isArray(values) ? values[0] : values;
+            if (value === 0 || isNaN(value) || value === noDataValue) return 'transparent';
+            if (value === 1) return '#f1c40f'; 
+            if (value === 2) return '#27ae60'; 
+            if (value === 3) return '#1e4620'; 
+            return 'transparent';
+        }
+
+        var defaultGeoJsonStyle = {
+            color: "#3498db", weight: 2, opacity: 0.8, fillColor: "#3498db", fillOpacity: 0.15
+        };
+        
+        var hoverGeoJsonStyle = {
+            color: "#e74c3c", weight: 3, opacity: 1.0, fillColor: "#e74c3c", fillOpacity: 0.35
+        };
+
+        var coordsDisplay = document.getElementById('mouse-coords');
+        var datalistElement = document.getElementById('mouza-datalist');
+
+        function onEachMouzaFeature(feature, layer) {
+            var props = feature.properties;
+            var uniqueLabel = props.MOUZA + " (Block: " + (props.BLOCK || "N/A") + ", Dist: " + (props.district || "N/A") + ")";
+            
+            geojsonFeaturesArray.push({ 
+                feature: feature, 
+                layer: layer, 
+                uniqueLabel: uniqueLabel,
+                mouzaCleanName: props.MOUZA ? props.MOUZA.trim().toLowerCase() : ""
+            });
+
+            var option = document.createElement('option');
+            option.value = uniqueLabel; 
+            datalistElement.appendChild(option);
+
+            layer.on({
+                mousemove: function(e) {
+                    var currentLat = e.latlng.lat.toFixed(5);
+                    var currentLng = e.latlng.lng.toFixed(5);
+                    
+                    if (layer !== highlightedSearchLayer) {
+                        layer.setStyle(hoverGeoJsonStyle);
+                    }
+
+                    coordsDisplay.innerHTML = 
+                        '<div class="hud-title">Mouza Attributes</div>' +
+                        '<b>District:</b> ' + (props.district || 'N/A') + '<br>' +
+                        '<b>Block:</b> ' + (props.BLOCK || 'N/A') + '<br>' +
+                        '<b>Mouza:</b> ' + (props.MOUZA || 'N/A') + '<br>' +
+                        '<b>Area (MA):</b> ' + (props.MA || '0') + ' Ha<br>' +
+                        '<span style="font-family:monospace; font-size:11px; color:#7f8c8d;">Lat: ' + currentLat + ', Lng: ' + currentLng + '</span>';
+                },
+                mouseout: function(e) {
+                    if (layer !== highlightedSearchLayer) {
+                        layer.setStyle(defaultGeoJsonStyle);
+                    }
+                    var currentLat = e.latlng ? e.latlng.lat.toFixed(5) : "0.00000";
+                    var currentLng = e.latlng ? e.latlng.lng.toFixed(5) : "0.00000";
+                    coordsDisplay.innerHTML = '<div class="hud-title">Map Coordinates</div>Lat: ' + currentLat + ', Lng: ' + currentLng;
+                }
+            });
+        }
+
+        function loadGeoJsonLayer(url, layerName) {
+            return fetch(url)
+                .then(res => { if(!res.ok) throw new Error(); return res.json(); })
+                .then(data => {
+                    var geoLayer = L.geoJSON(data, {
+                        style: defaultGeoJsonStyle,
+                        onEachFeature: onEachMouzaFeature
+                    }).addTo(map);
+                    layerControl.addOverlay(geoLayer, layerName);
+                })
+                .catch(err => {
+                    console.error("Failed to load file " + url);
+                    var fallback = L.layerGroup([]);
+                    layerControl.addOverlay(fallback, layerName + " ⚠️ (Missing)");
+                });
+        }
+
+        function loadSchemeGeoJson(config) {
+            return fetch(config.url)
+                .then(res => { if(!res.ok) throw new Error(); return res.json(); })
+                .then(data => {
+                    var schemeLayer = L.geoJSON(data, {
+                        pointToLayer: function (feature, latlng) {
+                            return L.circleMarker(latlng, {
+                                radius: 7,
+                                fillColor: config.color,
+                                color: "#ffffff",
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.9
+                            });
+                        },
+                        style: function() {
+                            return { color: config.color, weight: 3, opacity: 0.8 };
+                        },
+                        onEachFeature: function (feature, layer) {
+                            var props = feature.properties || {};
+                            var schemeTitle = props.name_of_scheme || props.name_of_wua || props.Name_of_Scheme || config.name;
+
+                            var popupHtml = '<div class="popup-card">' +
+                                            '<header style="color:' + config.color + ';">' + schemeTitle + '</header>' +
+                                            '<table class="attribute-table">';
+
+                            Object.keys(props).forEach(key => {
+                                var val = props[key];
+                                if (val !== null && val !== undefined && val !== "NULL") {
+                                    popupHtml += '<tr><td class="prop-name">' + key.replace(/_/g, " ") + ':</td><td>' + val + '</td></tr>';
+                                }
+                            });
+
+                            popupHtml += '</table></div>';
+                            layer.bindPopup(popupHtml);
+                        }
+                    }).addTo(map);
+
+                    layerControl.addOverlay(schemeLayer, '<span style="color:' + config.color + '; font-weight:bold;">●</span> ' + config.name);
+                })
+                .catch(err => {
+                    console.error("Could not load " + config.url);
+                    var fallbackGroup = L.layerGroup([]);
+                    layerControl.addOverlay(fallbackGroup, config.name + " ⚠️ (Missing)");
+                });
+        }
+
+        var layersLoadedCount = 0;
+        var totalExpectedLayers = tiffLayersConfig.length;
+
+        tiffLayersConfig.forEach(function(config) {
+            fetch(config.url)
+                .then(response => { if (!response.ok) throw new Error(); return response.arrayBuffer(); })
+                .then(arrayBuffer => {
+                    parseGeoraster(arrayBuffer).then(georaster => {
+                        var geoRasterLayer = new GeoRasterLayer({
+                            georaster: georaster, opacity: 0.8, resolution: 64,
+                            pixelValuesToColorFn: values => getPixelColor(values, georaster.noDataValue)
+                        });
+
+                        if (savedLayerLabel ? (savedLayerLabel === config.label) : config.defaultOn) {
+                            geoRasterLayer.addTo(map);
+                            if (!savedZoom) map.fitBounds(geoRasterLayer.getBounds());
+                        }
+                        layerControl.addOverlay(geoRasterLayer, config.label);
+                        checkAllFinished();
+                    });
+                })
+                .catch(error => {
+                    var fallbackLayer = L.layerGroup([]);
+                    layerControl.addOverlay(fallbackLayer, config.label + " ⚠️ (File Missing)");
+                    checkAllFinished();
+                });
+        });
+
+        Promise.all([
+            loadGeoJsonLayer("mouzabound.geojson", "Mouza Boundaries 1"),
+            loadGeoJsonLayer("mouzabound2.geojson", "Mouza Boundaries 2"),
+            ...schemeJsonConfigs.map(cfg => loadSchemeGeoJson(cfg))
+        ]).then(() => {
+            checkAllFinished(true);
+        });
+
+        function checkAllFinished(isVectorCall = false) {
+            if(!isVectorCall) layersLoadedCount++;
+            if (layersLoadedCount === totalExpectedLayers) {
+                hideLoader();
+            }
+        }
+
+        // --- Multi-CSV Upload Processor ---
+        var csvFileColorPalette = ['#e74c3c', '#8e44ad', '#d35400', '#16a085', '#2c3e50', '#e67e22', '#27ae60', '#9b59b6'];
+
+        function handleMultipleCSVUpload(event) {
+            var files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            var allBounds = [];
+
+            Array.from(files).forEach((file, fileIdx) => {
+                var layerColor = csvFileColorPalette[fileIdx % csvFileColorPalette.length];
+
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        var bounds = processAndAddCSVLayer(results.data, file.name, layerColor);
+                        if (bounds && bounds.length > 0) {
+                            allBounds = allBounds.concat(bounds);
+                        }
+                        if (allBounds.length > 0) {
+                            map.fitBounds(allBounds, { padding: [30, 30] });
+                        }
+                    },
+                    error: function(err) {
+                        alert("Error parsing " + file.name + ": " + err.message);
+                    }
+                });
+            });
+        }
+
+        function processAndAddCSVLayer(data, fileName, layerColor) {
+            if (!data || data.length === 0) return [];
+
+            var sampleRow = data[0];
+            var keys = Object.keys(sampleRow);
+
+            var latKey = keys.find(k => k.trim().toLowerCase().includes('lat'));
+            var lngKey = keys.find(k => k.trim().toLowerCase().includes('long') || k.trim().toLowerCase().includes('lng'));
+
+            if (!latKey || !lngKey) {
+                alert("Could not detect Latitude/Longitude columns in " + fileName + ". Ensure columns contain 'Lat' and 'Long'.");
+                return [];
+            }
+
+            var fileLayerGroup = L.layerGroup().addTo(map);
+            var boundsGroup = [];
+
+            data.forEach((row, index) => {
+                var lat = parseFloat(row[latKey]);
+                var lng = parseFloat(row[lngKey]);
+
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    var schemeTitle = row["Scheme /Activities Name"] || row["Type of scheme /Activities"] || ("Point #" + (index + 1));
+
+                    var popupHtml = '<div class="popup-card">' +
+                                    '<header style="color:' + layerColor + ';">' + schemeTitle + '</header>' +
+                                    '<table class="attribute-table">';
+
+                    Object.keys(row).forEach(col => {
+                        if (row[col] !== undefined && row[col] !== null && row[col] !== "") {
+                            popupHtml += '<tr><td class="prop-name">' + col + ':</td><td>' + row[col] + '</td></tr>';
+                        }
+                    });
+
+                    popupHtml += '</table></div>';
+
+                    var marker = L.circleMarker([lat, lng], {
+                        radius: 8,
+                        fillColor: layerColor,
+                        color: "#ffffff",
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.9
+                    }).bindPopup(popupHtml);
+
+                    fileLayerGroup.addLayer(marker);
+                    boundsGroup.push([lat, lng]);
+                }
+            });
+
+            layerControl.addOverlay(fileLayerGroup, '<span style="color:' + layerColor + '; font-weight:bold;">●</span> ' + fileName);
+            return boundsGroup;
+        }
+
+        // --- Custom GeoJSON Upload Handler ---
+        function handleCustomGeoJSONUpload(event) {
+            var file = event.target.files[0];
+            if (!file) return;
+
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    var geojsonData = JSON.parse(e.target.result);
+                    var customGroup = L.geoJSON(geojsonData, {
+                        pointToLayer: function (feature, latlng) {
+                            return L.circleMarker(latlng, {
+                                radius: 8,
+                                fillColor: "#9b59b6",
+                                color: "#ffffff",
+                                weight: 2,
+                                opacity: 1,
+                                fillOpacity: 0.9
+                            });
+                        },
+                        onEachFeature: function (feature, layer) {
+                            var props = feature.properties || {};
+                            var popupHtml = '<div class="popup-card"><header>Custom Feature</header><table class="attribute-table">';
+                            Object.keys(props).forEach(k => {
+                                popupHtml += '<tr><td class="prop-name">' + k + ':</td><td>' + props[k] + '</td></tr>';
+                            });
+                            popupHtml += '</table></div>';
+                            layer.bindPopup(popupHtml);
+                        }
+                    }).addTo(map);
+
+                    layerControl.addOverlay(customGroup, "Uploaded: " + file.name);
+                    map.fitBounds(customGroup.getBounds());
+                    alert("GeoJSON layer added successfully.");
+                } catch(err) {
+                    alert("Failed to parse GeoJSON file: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- Multi-Match Smart Lookup Engine Core ---
+        function searchMouza() {
+            var inputVal = document.getElementById('input-mouza').value.trim();
+            if (!inputVal) {
+                alert("Please enter a Mouza name to search.");
+                return;
+            }
+
+            if (highlightedSearchLayer) {
+                highlightedSearchLayer.setStyle(defaultGeoJsonStyle);
+                highlightedSearchLayer = null;
+            }
+
+            var match = null;
+            var searchLower = inputVal.toLowerCase();
+
+            match = geojsonFeaturesArray.find(item => item.uniqueLabel.toLowerCase() === searchLower);
+
+            if (!match) {
+                var occurrences = geojsonFeaturesArray.filter(item => item.mouzaCleanName === searchLower);
+                
+                if (occurrences.length === 0) {
+                    alert("Mouza '" + inputVal + "' not found in active data catalogs.");
+                    return;
+                } else if (occurrences.length === 1) {
+                    match = occurrences[0];
+                } else {
+                    var blocksList = occurrences.map(o => "  • " + o.uniqueLabel).join("\n");
+                    alert("Multiple Mouzas found with that name!\n\nPlease select the correct option from the dropdown menu list:\n\n" + blocksList);
+                    return;
+                }
+            }
+
+            if (match) {
+                var layer = match.layer;
+                var props = match.feature.properties;
+
+                highlightedSearchLayer = layer;
+                layer.setStyle({
+                    color: "#d35400", weight: 4, opacity: 1.0, fillColor: "#e67e22", fillOpacity: 0.4
+                });
+
+                var bounds = layer.getBounds();
+                map.fitBounds(bounds, { maxZoom: 14 });
+
+                var popupContent = 
+                    "<b>Mouza Found</b><br>" +
+                    "<b>District:</b> " + (props.district || 'N/A') + "<br>" +
+                    "<b>Block:</b> " + (props.BLOCK || 'N/A') + "<br>" +
+                    "<b>Mouza:</b> " + (props.MOUZA || 'N/A') + "<br>" +
+                    "<b>Area:</b> " + (props.MA || '0') + " Ha";
+
+                layer.bindPopup(popupContent).openPopup();
+            }
+        }
+
+        function plotCustomMarker() {
+            var lat = parseFloat(document.getElementById('input-lat').value);
+            var lng = parseFloat(document.getElementById('input-lng').value);
+
+            if (isNaN(lat) || isNaN(lng)) {
+                alert("Please type valid numeric values for Latitude and Longitude.");
+                return;
+            }
+
+            if (searchMarker) { map.removeLayer(searchMarker); }
+
+            searchMarker = L.marker([lat, lng]).addTo(map)
+                .bindPopup("<b>Target Location Coordinates</b><br>Lat: " + lat + "<br>Lng: " + lng)
+                .openPopup();
+
+            map.setView([lat, lng], 13);
+        }
+
+        map.on('overlayadd', function(e) {
+            var isTiffLayer = tiffLayersConfig.some(c => c.label === e.name);
+            if (isTiffLayer && savedLayerLabel !== e.name) {
+                var center = map.getCenter();
+                localStorage.setItem("activeTiffLayer", e.name);
+                localStorage.setItem("mapLat", center.lat);
+                localStorage.setItem("mapLng", center.lng);
+                localStorage.setItem("mapZoom", map.getZoom());
+                
+                showLoader("Switching Layer to " + e.name, "Refreshing workspace session properties...");
+                location.reload();
+            }
+        });
+
+        map.on('mousemove', function(e) {
+            if (coordsDisplay.innerHTML.includes("Map Coordinates")) {
+                var currentLat = e.latlng.lat.toFixed(5);
+                var currentLng = e.latlng.lng.toFixed(5);
+                coordsDisplay.innerHTML = '<div class="hud-title">Map Coordinates</div>Lat: ' + currentLat + ', Lng: ' + currentLng;
+            }
+        });
+
+        var legend = L.control({position: 'bottomright'});
+        legend.onAdd = function (map) {
+            var div = L.DomUtil.create('div', 'legend');
+            div.innerHTML = '<h4>Cropping Intensity</h4>' +
+                            '<i style="background: #f1c40f"></i> Single Crop<br>' +
+                            '<i style="background: #27ae60"></i> Double Crop<br>' +
+                            '<i style="background: #1e4620"></i> Triple Crop';
+            return div;
+        };
+        legend.addTo(map);
+    </script>
+</body>
+</html>

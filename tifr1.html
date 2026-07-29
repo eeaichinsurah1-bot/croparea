@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web map by Dayamoy Ghosh EE </title>
+    <title>Web map for Crop Analysis by Dayamoy Ghosh (Multi-Year)</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <!-- Leaflet-Geoman Toolbar CSS for Drawing & Measurement Tools -->
@@ -21,13 +21,26 @@
         .legend i { width: 16px; height: 16px; float: left; margin-right: 8px; opacity: 0.9; border: 1px solid #ccc; }
         .legend h4 { margin: 5px 0; font-size: 14px; }
         
-        /* Unified Control Box (Coordinates + Mouza Finder + File Loaders) */
+        /* Collapsible Control Box (Coordinates + Mouza Finder + File Loaders) */
         #search-container {
             position: absolute; top: 10px; left: 55px; z-index: 1000;
-            background: white; padding: 12px; border-radius: 5px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 8px;
-            width: 320px;
+            background: white; border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); display: flex; flex-direction: column;
+            width: 320px; transition: all 0.3s ease-in-out; overflow: hidden;
         }
+        
+        /* Panel Toggle Header Bar */
+        .panel-header {
+            background: #2c3e50; color: white; padding: 8px 12px; font-size: 12px;
+            font-weight: bold; display: flex; justify-content: space-between; align-items: center;
+            cursor: pointer; user-select: none;
+        }
+        .panel-header:hover { background: #34495e; }
+        .toggle-btn { background: #16a085; color: white; border: none; border-radius: 3px; font-weight: bold; width: 20px; height: 20px; line-height: 18px; text-align: center; font-size: 14px; }
+
+        /* Panel Body Content */
+        #panel-body { padding: 12px; display: none; flex-direction: column; gap: 8px; }
+
         .search-row { display: flex; gap: 6px; align-items: center; }
         #search-container input[type="number"], 
         #search-container input[type="text"] { flex: 1; padding: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; min-width: 0; }
@@ -94,29 +107,35 @@
         <div id="loading-text">Loading Workspace Layers...<br><span style="font-size:12px; color:#7f8c8d; font-weight:normal;">Rendering high-resolution spatial details. Please wait.</span></div>
     </div>
 
-    <!-- Unified Sidebar Search Toolkit -->
+    <!-- Unified Collapsible Sidebar Search Toolkit -->
     <div id="search-container">
-        <!-- Lat Lng Plotter -->
-        <div class="search-row">
-            <input type="number" id="input-lat" placeholder="Latitude" step="any">
-            <input type="number" id="input-lng" placeholder="Longitude" step="any">
-            <button class="btn-go" onclick="plotCustomMarker()">Go</button>
+        <div class="panel-header" onclick="toggleSearchPanel()">
+            <span>⚙️ Click + to expand : Dayamoy Ghosh EE</span>
+            <span class="toggle-btn" id="panel-toggle-symbol">+</span>
         </div>
-        <!-- Mouza Boundary Finder -->
-        <div class="search-row">
-            <input type="text" id="input-mouza" list="mouza-datalist" placeholder="Type Mouza Name...">
-            <datalist id="mouza-datalist"></datalist>
-            <button class="btn-mouza" onclick="searchMouza()">Find Mouza</button>
-        </div>
-        <!-- Multiple CSV Files Loader -->
-        <div class="file-upload-section">
-            <label for="csv-file-input">📁 Upload Scheme CSV Data (Multiple):</label>
-            <input type="file" id="csv-file-input" accept=".csv" multiple onchange="handleMultipleCSVUpload(event)">
-        </div>
-        <!-- Custom Local GeoJSON Loader -->
-        <div class="file-upload-section">
-            <label for="geojson-file-input">🌐 Upload Custom GeoJSON:</label>
-            <input type="file" id="geojson-file-input" accept=".json,.geojson" onchange="handleCustomGeoJSONUpload(event)">
+        <div id="panel-body">
+            <!-- Lat Lng Plotter -->
+            <div class="search-row">
+                <input type="number" id="input-lat" placeholder="Latitude" step="any">
+                <input type="number" id="input-lng" placeholder="Longitude" step="any">
+                <button class="btn-go" onclick="plotCustomMarker()">Go</button>
+            </div>
+            <!-- Mouza Boundary Finder -->
+            <div class="search-row">
+                <input type="text" id="input-mouza" list="mouza-datalist" placeholder="Type Mouza Name...">
+                <datalist id="mouza-datalist"></datalist>
+                <button class="btn-mouza" onclick="searchMouza()">Find Mouza</button>
+            </div>
+            <!-- Multiple CSV Files Loader -->
+            <div class="file-upload-section">
+                <label for="csv-file-input">📁 Upload Scheme CSV Data (Multiple):</label>
+                <input type="file" id="csv-file-input" accept=".csv" multiple onchange="handleMultipleCSVUpload(event)">
+            </div>
+            <!-- Custom Local GeoJSON Loader -->
+            <div class="file-upload-section">
+                <label for="geojson-file-input">🌐 Upload Custom GeoJSON:</label>
+                <input type="file" id="geojson-file-input" accept=".json,.geojson" onchange="handleCustomGeoJSONUpload(event)">
+            </div>
         </div>
     </div>
 
@@ -132,12 +151,23 @@
     <script src="https://unpkg.com/georaster@1.6.0/dist/georaster.browser.bundle.min.js"></script>
     <script src="https://unpkg.com/georaster-layer-for-leaflet/dist/georaster-layer-for-leaflet.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <!-- Turf.js Library for spatial geometry & distance/area measurements -->
     <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
-    <!-- Leaflet Geoman JS for Drawing and Measuring -->
     <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@2.14.2/dist/leaflet-geoman.min.js"></script>
 
     <script>
+        // Toggle Search Panel Minimization
+        function toggleSearchPanel() {
+            var body = document.getElementById('panel-body');
+            var btnSymbol = document.getElementById('panel-toggle-symbol');
+            if (body.style.display === 'flex') {
+                body.style.display = 'none';
+                btnSymbol.innerText = '+';
+            } else {
+                body.style.display = 'flex';
+                btnSymbol.innerText = '−';
+            }
+        }
+
         var loader = document.getElementById('loading-overlay');
         var loaderText = document.getElementById('loading-text');
 
@@ -164,7 +194,7 @@
         var geojsonFeaturesArray = []; 
         var highlightedSearchLayer = null; 
 
-        // --- Initialize Measurement & Drawing Toolbar ---
+        // Initialize Measurement & Drawing Toolbar
         map.pm.addControls({
             position: 'topleft',
             drawCircleMarker: false,
@@ -179,7 +209,6 @@
             removalMode: true
         });
 
-        // Event handler to calculate distance, perimeter, and area on shape creation
         map.on('pm:create', function(e) {
             var layer = e.layer;
             var shape = e.shape;
@@ -228,7 +257,9 @@
         };
 
         var overlayMaps = {};
-        var layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: false }).addTo(map);
+        
+        // COLLAPSED LAYER CONTROL: Keeps map clear by hiding layer menu until hovered/clicked
+        var layerControl = L.control.layers(baseMaps, overlayMaps, { collapsed: true }).addTo(map);
 
         var tiffLayersConfig = [
             { label: "Cropping Intensity (2017-18)", url: "West_Bengal_Cropping_Intensity_2017_18.tif", defaultOn: true },

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive GIS Web Map & Mouza Spatial Analyzer</title>
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Turf.js for Spatial Analysis -->
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+    <!-- PapaParse for CSV handling -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Leaflet Geoman for Drawing -->
+    <link rel="stylesheet" href="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.css" />
+    <script src="https://unpkg.com/@geoman-io/leaflet-geoman-free@latest/dist/leaflet-geoman.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Roboto, sans-serif; }
+        #map { width: 100%; height: 100%; z-index: 1; }
+
+        /* Sidebar Control Panel */
+        #control-panel {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            width: 320px;
+            max-height: calc(100vh - 30px);
+            overflow-y: auto;
+        }
+
+        h3 { margin-top: 0; margin-bottom: 10px; color: #2c3e50; font-size: 16px; border-bottom: 2px solid #3498db; padding-bottom: 5px; }
+        .section-title { font-size: 13px; font-weight: bold; color: #34495e; margin: 12px 0 5px 0; text-transform: uppercase; }
+        
+        .input-group { margin-bottom: 8px; display: flex; gap: 5px; }
+        input[type="text"], input[type="number"], input[type="file"] {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .btn-mouza {
+            width: 100%;
+            padding: 8px 10px;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-mouza:hover { opacity: 0.9; }
+
+        /* Mouse Coordinates & Attributes HUD (Positioned at Bottom-Right) */
+        #hud-card {
+            position: absolute;
+            bottom: 25px;
+            right: 15px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            font-size: 12px;
+            line-height: 1.5;
+            min-width: 240px;
+            max-width: 300px;
+            pointer-events: none; /* Prevents interference with map clicks */
+        }
+        .hud-title { font-weight: bold; color: #2980b9; margin-bottom: 5px; border-bottom: 1px solid #ddd; padding-bottom: 3px; font-size: 13px; }
+
+        /* Custom Popup Styling */
+        .popup-card header { font-weight: bold; color: #2c3e50; margin-bottom: 4px; }
+        .prop-table { width: 100%; font-size: 11px; border-collapse: collapse; }
+        .prop-table td { padding: 2px 4px; border-bottom: 1px solid #eee; }
+        .prop-name { font-weight: bold; color: #7f8c8d; }
+
+        /* Dynamic CSS rule for Empty Polygons */
+        .empty-mouza-highlight {
+            stroke: #e74c3c !important;
+            stroke-width: 2.5 !important;
+            stroke-dasharray: 6, 6 !important;
+            fill: #e74c3c !important;
+            fill-opacity: 0.25 !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="control-panel">
+        <h3>Spatial Analysis & Map Controls</h3>
+        
+        <!-- Search Mouza -->
+        <div class="section-title">Mouza Search</div>
+        <div class="input-group">
+            <input type="text" id="input-mouza" placeholder="Enter Mouza name..." />
+            <button class="btn-mouza" style="background:#2980b9; width: 80px;" onclick="searchMouza()">Search</button>
+        </div>
+
+        <!-- Lat / Lng Plotter -->
+        <div class="section-title">Plot Coordinates</div>
+        <div class="input-group">
+            <input type="number" id="input-lat" step="any" placeholder="Latitude" />
+            <input type="number" id="input-lng" step="any" placeholder="Longitude" />
+        </div>
+        <button class="btn-mouza" style="background:#27ae60;" onclick="plotCustomMarker()">Plot Marker</button>
+
+        <!-- Dynamic Data Load -->
+        <div class="section-title">Load Vector Data (CSV / GeoJSON)</div>
+        <input type="file" id="file-uploader" accept=".csv, .geojson, .json" style="margin-bottom:6px;" />
+
+        <!-- Polygon Point Calculations -->
+        <div class="section-title">Spatial Point Analysis</div>
+        <button class="btn-mouza" style="background:#16a085; margin-bottom:4px;" onclick="calculateDrawnShapesTotalPoints()">
+            📊 Count Points in Drawn Polygons
+        </button>
+        <button class="btn-mouza" style="background:#e74c3c; margin-bottom:4px;" onclick="highlightEmptyPolygons()">
+            ⚠️ Highlight Empty Mouzas (0 Points)
+        </button>
+        <button class="btn-mouza" style="background:#8e44ad; margin-bottom:4px;" onclick="toggleHideEmptyMouzas()" id="btn-toggle-empty">
+            👁️ Hide Empty Mouzas
+        </button>
+        <button class="btn-mouza" style="background:#7f8c8d;" onclick="resetMouzaStyles()">
+            ↺ Reset Mouza Styles & Visibility
+        </button>
+    </div>
+
+    <!-- Map HUD (Now placed neatly at bottom-right) -->
+    <div id="hud-card">
+        <div class="hud-title">Mouza & Point Attributes</div>
+        <div id="coords-display">Hover over a Mouza to inspect attributes and point counts.</div>
+    </div>
+
+    <!-- Map Container -->
+    <div id="map"></div>
+
+    <script>
+        // Default Styles
+        var defaultGeoJsonStyle = { color: "#2c3e50", weight: 1.5, fillColor: "#3498db", fillOpacity: 0.15 };
+        var hoverGeoJsonStyle = { color: "#e67e22", weight: 3, fillColor: "#f39c12", fillOpacity: 0.4 };
+
+        // Color Palette for Loaded Point Layers
+        var layerColors = ["#e74c3c", "#9b59b6", "#16a085", "#f39c12", "#d35400", "#c0392b", "#8e44ad"];
+        var colorIdx = 0;
+
+        // Global State Registers
+        var geojsonFeaturesArray = [];
+        var searchMarker = null;
+        var highlightedSearchLayer = null;
+        var emptyMouzasHidden = false;
+
+        // Initialize Map
+        var savedLat = localStorage.getItem("mapLat") || 22.5726;
+        var savedLng = localStorage.getItem("mapLng") || 88.3639;
+        var savedZoom = localStorage.getItem("mapZoom") || 10;
+
+        var map = L.map('map').setView([parseFloat(savedLat), parseFloat(savedLng)], parseInt(savedZoom));
+
+        // Base Layers
+        var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        var satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles © Esri'
+        });
+
+        var baseMaps = { "OpenStreetMap": osmLayer, "Satellite": satelliteLayer };
+        var layerControl = L.control.layers(baseMaps, null, { collapsed: true }).addTo(map);
+
+        // Geoman Layer Group for User-Drawn Features
+        var drawnItemsGroup = new L.FeatureGroup().addTo(map);
+        map.pm.addControls({ position: 'topright', drawCircleMarker: false });
+        map.on('pm:create', function(e) {
+            drawnItemsGroup.addLayer(e.layer);
+        });
+
+        // -------------------------------------------------------------
+        // SPATIAL CORE FUNCTIONS
+        // -------------------------------------------------------------
+
+        // 1. Gather all active map markers/points into a Turf FeatureCollection
+        function getAllActivePointsCollection() {
+            var allPoints = [];
+            map.eachLayer(function(layer) {
+                if ((layer instanceof L.CircleMarker || layer instanceof L.Marker) && layer !== searchMarker) {
+                    var latLng = layer.getLatLng();
+                    allPoints.push(turf.point([latLng.lng, latLng.lat]));
+                }
+            });
+            return turf.featureCollection(allPoints);
+        }
+
+        // 2. Count points contained in a single Mouza feature
+        function countPointsInMouza(mouzaFeature) {
+            var pointsCollection = getAllActivePointsCollection();
+            if (pointsCollection.features.length === 0) return 0;
+
+            var ptsWithin = turf.pointsWithinPolygon(pointsCollection, mouzaFeature);
+            return ptsWithin.features.length;
+        }
+
+        // 3. Highlight polygons containing 0 points
+        function highlightEmptyPolygons(quiet = false) {
+            var pointsCollection = getAllActivePointsCollection();
+            var emptyCount = 0;
+            var totalPolygons = geojsonFeaturesArray.length;
+
+            if (totalPolygons === 0) {
+                if (!quiet) alert("No Mouza polygons are currently loaded.");
+                return 0;
+            }
+
+            geojsonFeaturesArray.forEach(function(item) {
+                var mouzaLayer = item.layer;
+                var mouzaFeature = item.feature;
+
+                mouzaLayer.setStyle(defaultGeoJsonStyle);
+
+                var pointsInside = 0;
+                if (pointsCollection.features.length > 0) {
+                    var ptsWithin = turf.pointsWithinPolygon(pointsCollection, mouzaFeature);
+                    pointsInside = ptsWithin.features.length;
+                }
+
+                if (pointsInside === 0) {
+                    emptyCount++;
+                    mouzaLayer.setStyle({
+                        color: "#e74c3c",
+                        weight: 2.5,
+                        dashArray: "6, 6",
+                        fillColor: "#e74c3c",
+                        fillOpacity: 0.25
+                    });
+                }
+            });
+
+            if (!quiet) {
+                alert("Analysis Complete:\nFound " + emptyCount + " Mouzas with 0 points out of " + totalPolygons + " total Mouzas.");
+            }
+            return emptyCount;
+        }
+
+        // 4. Toggle visibility of empty Mouzas (Hide / Show)
+        function toggleHideEmptyMouzas() {
+            var pointsCollection = getAllActivePointsCollection();
+            var btn = document.getElementById('btn-toggle-empty');
+
+            emptyMouzasHidden = !emptyMouzasHidden;
+
+            geojsonFeaturesArray.forEach(function(item) {
+                var mouzaLayer = item.layer;
+                var mouzaFeature = item.feature;
+
+                var pointsInside = 0;
+                if (pointsCollection.features.length > 0) {
+                    var ptsWithin = turf.pointsWithinPolygon(pointsCollection, mouzaFeature);
+                    pointsInside = ptsWithin.features.length;
+                }
+
+                if (pointsInside === 0) {
+                    if (emptyMouzasHidden) {
+                        mouzaLayer.setStyle({ fillOpacity: 0, opacity: 0 });
+                    } else {
+                        mouzaLayer.setStyle({ color: "#e74c3c", weight: 2.5, dashArray: "6, 6", fillColor: "#e74c3c", fillOpacity: 0.25 });
+                    }
+                }
+            });
+
+            btn.innerHTML = emptyMouzasHidden ? "👁️ Show Empty Mouzas" : "👁️ Hide Empty Mouzas";
+        }
+
+        // 5. Reset all Mouza styles and visibility
+        function resetMouzaStyles() {
+            emptyMouzasHidden = false;
+            document.getElementById('btn-toggle-empty').innerHTML = "👁️ Hide Empty Mouzas";
+
+            geojsonFeaturesArray.forEach(function(item) {
+                item.layer.setStyle(defaultGeoJsonStyle);
+            });
+        }
+
+        // 6. Calculate total unique points in all drawn polygons
+        function calculateDrawnShapesTotalPoints() {
+            var drawnPolygons = [];
+            drawnItemsGroup.eachLayer(function(layer) {
+                if (layer instanceof L.Polygon) {
+                    drawnPolygons.push(layer.toGeoJSON());
+                }
+            });
+
+            if (drawnPolygons.length === 0) {
+                alert("Please draw at least one polygon or shape on the map using the Geoman toolbar (top right).");
+                return;
+            }
+
+            var pointsCollection = getAllActivePointsCollection();
+            if (pointsCollection.features.length === 0) {
+                alert("No point layers are currently present on the map.");
+                return;
+            }
+
+            var combinedPolygons = turf.combine(turf.featureCollection(drawnPolygons));
+            var ptsWithin = turf.pointsWithinPolygon(pointsCollection, combinedPolygons.features[0]);
+
+            alert("Total unique points enclosed by drawn shapes: " + ptsWithin.features.length);
+        }
+
+        // -------------------------------------------------------------
+        // LAYER & FEATURE BINDING
+        // -------------------------------------------------------------
+        var coordsDisplay = document.getElementById('coords-display');
+
+        function onEachMouzaFeature(feature, layer) {
+            var props = feature.properties || {};
+            var mouzaName = props.MOUZA || props.mouza || props.NAME || 'Unnamed Mouza';
+            var cleanName = mouzaName.toString().trim().toLowerCase();
+
+            geojsonFeaturesArray.push({
+                feature: feature,
+                layer: layer,
+                mouzaCleanName: cleanName,
+                uniqueLabel: cleanName
+            });
+
+            layer.on({
+                mouseover: function(e) {
+                    if (layer !== highlightedSearchLayer && !emptyMouzasHidden) {
+                        layer.setStyle(hoverGeoJsonStyle);
+                    }
+                },
+                mouseout: function(e) {
+                    if (layer !== highlightedSearchLayer && !emptyMouzasHidden) {
+                        layer.setStyle(defaultGeoJsonStyle);
+                    }
+                },
+                mousemove: function(e) {
+                    var currentLat = e.latlng.lat.toFixed(5);
+                    var currentLng = e.latlng.lng.toFixed(5);
+                    
+                    var pointsCount = countPointsInMouza(feature);
+
+                    coordsDisplay.innerHTML =
+                        '<b>District:</b> ' + (props.district || props.DISTRICT || 'N/A') + '<br>' +
+                        '<b>Block:</b> ' + (props.BLOCK || props.block || 'N/A') + '<br>' +
+                        '<b>Mouza:</b> ' + mouzaName + '<br>' +
+                        '<b>Area (MA):</b> ' + (props.MA || '0') + ' Ha<br>' +
+                        '<b style="color:#e67e22;">Enclosed Points:</b> ' + pointsCount + '<br>' +
+                        '<span style="font-family:monospace; font-size:11px; color:#7f8c8d;">Lat: ' + currentLat + ', Lng: ' + currentLng + '</span>';
+                }
+            });
+
+            var popupHtml = '<div class="popup-card"><header>' + mouzaName + '</header><table class="prop-table">';
+            Object.keys(props).forEach(col => {
+                popupHtml += '<tr><td class="prop-name">' + col + ':</td><td>' + props[col] + '</td></tr>';
+            });
+            popupHtml += '</table></div>';
+            layer.bindPopup(popupHtml);
+        }
+
+        // -------------------------------------------------------------
+        // FILE UPLOADER
+        // -------------------------------------------------------------
+        document.getElementById('file-uploader').addEventListener('change', function(e) {
+            var file = e.target.files[0];
+            if (!file) return;
+
+            var fileName = file.name;
+            var fileExt = fileName.split('.').pop().toLowerCase();
+            var reader = new FileReader();
+
+            var currentLayerColor = layerColors[colorIdx % layerColors.length];
+            colorIdx++;
+
+            if (fileExt === 'csv') {
+                reader.onload = function(evt) {
+                    Papa.parse(evt.target.result, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: function(results) {
+                            parseAndAddCsvPoints(results.data, fileName, currentLayerColor);
+                            highlightEmptyPolygons(true);
+                        }
+                    });
+                };
+                reader.readAsText(file);
+            } else if (fileExt === 'geojson' || fileExt === 'json') {
+                reader.onload = function(evt) {
+                    var geoData = JSON.parse(evt.target.result);
+                    var fileLayerGroup = L.geoJSON(geoData, {
+                        style: defaultGeoJsonStyle,
+                        onEachFeature: function(feature, layer) {
+                            if (feature.geometry && (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon')) {
+                                onEachMouzaFeature(feature, layer);
+                            }
+                        },
+                        pointToLayer: function(feature, latlng) {
+                            return L.circleMarker(latlng, {
+                                radius: 6,
+                                fillColor: currentLayerColor,
+                                color: "#ffffff",
+                                weight: 1.5,
+                                fillOpacity: 0.85
+                            });
+                        }
+                    }).addTo(map);
+
+                    layerControl.addOverlay(fileLayerGroup, '<span style="color:' + currentLayerColor + '; font-weight:bold;">●</span> ' + fileName);
+                    map.fitBounds(fileLayerGroup.getBounds());
+                    highlightEmptyPolygons(true);
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // CSV Point Parser Function
+        function parseAndAddCsvPoints(data, fileName, layerColor) {
+            var fileLayerGroup = L.layerGroup().addTo(map);
+            var boundsGroup = [];
+
+            data.forEach(function(row) {
+                var latCol = Object.keys(row).find(k => k.toLowerCase().includes('lat') || k.toLowerCase() === 'y');
+                var lngCol = Object.keys(row).find(k => k.toLowerCase().includes('lng') || k.toLowerCase().includes('lon') || k.toLowerCase() === 'x');
+
+                if (latCol && lngCol) {
+                    var lat = parseFloat(row[latCol]);
+                    var lng = parseFloat(row[lngCol]);
+
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        var popupHtml = '<div class="popup-card"><header>' + fileName + '</header><table class="prop-table">';
+                        Object.keys(row).forEach(col => { if (row[col]) popupHtml += '<tr><td class="prop-name">' + col + ':</td><td>' + row[col] + '</td></tr>'; });
+                        popupHtml += '</table></div>';
+
+                        var marker = L.circleMarker([lat, lng], {
+                            radius: 6,
+                            fillColor: layerColor,
+                            color: "#ffffff",
+                            weight: 1.5,
+                            opacity: 1,
+                            fillOpacity: 0.85
+                        }).bindPopup(popupHtml);
+
+                        fileLayerGroup.addLayer(marker);
+                        boundsGroup.push([lat, lng]);
+                    }
+                }
+            });
+
+            if (boundsGroup.length > 0) {
+                layerControl.addOverlay(fileLayerGroup, '<span style="color:' + layerColor + '; font-weight:bold;">●</span> ' + fileName);
+                map.fitBounds(boundsGroup);
+            }
+        }
+
+        // -------------------------------------------------------------
+        // MAP CONTROLS & ACTIONS
+        // -------------------------------------------------------------
+
+        // Plot Custom Coordinate Marker
+        function plotCustomMarker() {
+            var lat = parseFloat(document.getElementById('input-lat').value);
+            var lng = parseFloat(document.getElementById('input-lng').value);
+
+            if (isNaN(lat) || isNaN(lng)) {
+                alert("Please enter valid numerical Latitude and Longitude values.");
+                return;
+            }
+
+            if (searchMarker) { map.removeLayer(searchMarker); }
+
+            searchMarker = L.marker([lat, lng]).addTo(map);
+            searchMarker.bindPopup('<div class="popup-card"><header>Plotted Location</header><b>Lat:</b> ' + lat + '<br><b>Lng:</b> ' + lng + '</div>').openPopup();
+            map.setView([lat, lng], 15);
+
+            highlightEmptyPolygons(true);
+        }
+
+        // Mouza Search Action
+        function searchMouza() {
+            var inputVal = document.getElementById('input-mouza').value.trim().toLowerCase();
+            if (!inputVal) return;
+
+            var match = geojsonFeaturesArray.find(item => item.uniqueLabel.toLowerCase() === inputVal || item.mouzaCleanName === inputVal);
+
+            if (match) {
+                if (highlightedSearchLayer && highlightedSearchLayer !== match.layer) {
+                    highlightedSearchLayer.setStyle(defaultGeoJsonStyle);
+                }
+
+                highlightedSearchLayer = match.layer;
+                highlightedSearchLayer.setStyle(hoverGeoJsonStyle);
+
+                var bounds = highlightedSearchLayer.getBounds();
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                }
+            } else {
+                alert("Mouza not found. Make sure the Mouza GeoJSON layer is loaded.");
+            }
+        }
+
+        // Save Map Position State
+        map.on('moveend', function() {
+            var center = map.getCenter();
+            localStorage.setItem("mapLat", center.lat);
+            localStorage.setItem("mapLng", center.lng);
+            localStorage.setItem("mapZoom", map.getZoom());
+        });
+    </script>
+</body>
+</html>

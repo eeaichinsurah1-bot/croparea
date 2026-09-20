@@ -1,0 +1,1695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WEB GIS MAP BY: Dayamoy Ghosh,EE - Complete Precision Suite</title>
+
+    <!-- Leaflet & Drawing Plugins CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+
+    <!-- External GIS Core & Processing Engines -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/geotiff"></script>
+    <script src="https://api.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.1/leaflet-omnivore.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --primary-hover: #1d4ed8;
+            --success: #15803d;
+            --success-hover: #166534;
+            --danger: #b91c1c;
+            --dark: #0f172a;
+            --panel-bg: rgba(255, 255, 255, 0.97);
+        }
+
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, system-ui, sans-serif; overflow: hidden; background: #000; }
+        #map { height: 100vh; width: 100%; z-index: 1; }
+
+        /* Crisp, Non-Interpolated Square Pixel Grids (ArcGIS / QGIS standard) */
+        .leaflet-image-layer.crisp-pixels,
+        .crisp-pixels {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            image-rendering: pixelated;
+        }
+
+        /* Top Minimal Toolbar */
+        .top-nav {
+            position: absolute; top: 12px; left: 55px; z-index: 1000;
+            display: flex; align-items: center; gap: 8px;
+            background: var(--panel-bg); padding: 6px 14px;
+            border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.25);
+            border: 1px solid rgba(0,0,0,0.08);
+            backdrop-filter: blur(4px);
+        }
+        .top-nav b { font-size: 13px; color: var(--primary); letter-spacing: 0.3px; }
+        .top-btn {
+            background: var(--success); color: #fff; border: none; padding: 6px 11px;
+            border-radius: 5px; font-size: 11px; font-weight: 700; cursor: pointer;
+            display: inline-flex; align-items: center; gap: 4px; transition: background 0.15s ease;
+        }
+        .top-btn:hover { background: var(--success-hover); }
+        .top-btn.blue { background: var(--primary); }
+        .top-btn.blue:hover { background: var(--primary-hover); }
+        .top-btn.slate { background: #475569; }
+        .top-btn.slate:hover { background: #334155; }
+        .top-btn.amber { background: #d97706; }
+        .top-btn.amber:hover { background: #b45309; }
+        .top-btn.indigo { background: #4f46e5; }
+        .top-btn.indigo:hover { background: #4338ca; }
+
+        /* Generic Collapsible Drawer Panel */
+        .drawer-panel {
+            position: absolute; top: 58px; z-index: 1000;
+            background: var(--panel-bg); padding: 14px;
+            border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+            border: 1px solid rgba(0,0,0,0.1);
+            max-height: calc(100vh - 100px); overflow-y: auto;
+            display: none; backdrop-filter: blur(6px);
+        }
+        .panel-title { 
+            font-size: 13px; font-weight: bold; color: var(--dark); 
+            border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 8px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .panel-close-btn {
+            background: transparent; border: none; font-size: 16px; font-weight: bold;
+            color: #64748b; cursor: pointer; line-height: 1;
+        }
+        .panel-close-btn:hover { color: var(--danger); }
+
+        #analysis-panel { left: 12px; width: 340px; }
+        #layers-panel { left: 12px; width: 330px; }
+        #measure-panel { left: 12px; width: 280px; }
+        #search-drawer { left: 12px; width: 340px; }
+
+        /* Form Controls */
+        .setting-group { margin-bottom: 10px; }
+        .setting-group label { font-size: 10px; font-weight: 700; color: #475569; display: flex; justify-content: space-between; margin-bottom: 3px; }
+        .setting-group select, .setting-group input[type="text"], .setting-group input[type="number"] { width: 100%; padding: 6px; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 4px; }
+        .setting-group input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer; }
+
+        /* Action Buttons */
+        .action-btn { width: 100%; padding: 7px; margin: 4px 0; border: none; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 11px; transition: opacity 0.15s; }
+        .run-btn { background: var(--success); color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
+        .run-btn:hover { background: var(--success-hover); }
+        .export-btn { background: #0284c7; color: white; }
+        .export-btn:hover { background: #0369a1; }
+        .export-excel { background: #15803d; color: white; }
+        .export-excel:hover { background: #166534; }
+        .find-btn { background: #4f46e5; color: white; }
+        .find-btn:hover { background: #4338ca; }
+
+        /* Progress Bar */
+        .progress-container { margin: 8px 0; display: none; }
+        .progress-bar-bg { width: 100%; background-color: #e2e8f0; border-radius: 4px; height: 12px; overflow: hidden; }
+        .progress-bar-fill { width: 0%; height: 100%; background-color: #2563eb; transition: width 0.1s ease; }
+        .progress-label { font-size: 10px; font-weight: 700; color: #334155; text-align: center; margin-top: 3px; }
+
+        /* Crop Cards */
+        .crop-stat { margin: 3px 0; padding: 6px 9px; border-radius: 4px; font-size: 11px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+        .s-crop { background: #FFFF00; color: #000; border: 1px solid #eab308; }
+        .d-crop { background: #68D300; color: #000; }
+        .t-crop { background: #006400; color: #fff; }
+        .o-crop { background: #BDBDBD; color: #000; }
+        .w-crop { background: #38bdf8; color: #000; }
+        .total-area { background: var(--dark); color: #fff; margin-top: 6px; font-size: 11px; }
+
+        /* Layer List Item Cards */
+        .layer-item-card {
+            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+            padding: 8px; margin-bottom: 6px; font-size: 11px;
+        }
+        .layer-item-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+        .layer-name-tag { font-weight: 700; color: var(--dark); max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .layer-item-tools { display: flex; align-items: center; gap: 5px; }
+        .color-picker-input { border: none; width: 22px; height: 22px; cursor: pointer; background: transparent; padding: 0; }
+        .sm-btn { background: #e2e8f0; border: none; border-radius: 3px; padding: 2px 6px; font-size: 10px; cursor: pointer; }
+        .sm-btn:hover { background: #cbd5e1; }
+        .sm-btn.del:hover { background: #fecaca; color: var(--danger); }
+
+        /* Measurement Badges */
+        .measure-result-box {
+            background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px;
+            padding: 8px; font-size: 11px; margin-top: 8px; line-height: 1.5;
+        }
+
+        /* Search Results List */
+        .search-results-list {
+            max-height: 180px; overflow-y: auto; margin-top: 8px;
+            border: 1px solid #e2e8f0; border-radius: 6px; background: #fff;
+        }
+        .search-result-item {
+            padding: 6px 8px; border-bottom: 1px solid #f1f5f9; font-size: 11px;
+            cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+        }
+        .search-result-item:hover, .search-result-item.active {
+            background: #eef2ff; color: #3730a3;
+        }
+        .search-result-tag {
+            font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 10px;
+            background: #e0e7ff; color: #4338ca;
+        }
+
+        /* Pulse Marker Animation for Highlighted Search & Right-Click Pin */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.6); opacity: 1; }
+            100% { transform: scale(2.4); opacity: 0; }
+        }
+        .pulse-marker-icon {
+            position: relative; width: 24px; height: 24px;
+        }
+        .pulse-dot {
+            width: 14px; height: 14px; background: #dc2626; border: 2px solid #fff;
+            border-radius: 50%; position: absolute; top: 5px; left: 5px; z-index: 2;
+            box-shadow: 0 0 8px rgba(220,38,38,0.8);
+        }
+        .pulse-wave {
+            width: 24px; height: 24px; background: rgba(239, 68, 68, 0.5);
+            border-radius: 50%; position: absolute; top: 0; left: 0;
+            animation: pulse-ring 1.3s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        /* Custom Right Click Elevation & Street View Popup Card */
+        .elevation-popup-card {
+            width: 310px; font-family: 'Segoe UI', Tahoma, sans-serif; font-size: 12px;
+            line-height: 1.45; color: #1e293b;
+        }
+        .elevation-badge {
+            background: linear-gradient(135deg, #0284c7, #0369a1);
+            color: white; padding: 8px 12px; border-radius: 6px;
+            display: flex; justify-content: space-between; align-items: center;
+            margin: 6px 0 8px 0; box-shadow: 0 2px 5px rgba(2,132,199,0.25);
+        }
+        .elevation-badge .elev-main { font-size: 18px; font-weight: 800; letter-spacing: 0.5px; }
+        .elevation-badge .elev-sub { font-size: 11px; opacity: 0.9; text-align: right; }
+        
+        .streetview-thumbnail-container {
+            position: relative; width: 100%; height: 140px; border-radius: 6px;
+            overflow: hidden; background: #0f172a; margin-top: 8px; border: 1px solid #cbd5e1;
+        }
+        .streetview-thumbnail-container iframe {
+            width: 100%; height: 100%; border: none;
+        }
+        .streetview-btn-row {
+            display: flex; gap: 5px; margin-top: 8px;
+        }
+        .streetview-btn {
+            flex: 1; display: inline-flex; align-items: center; justify-content: center;
+            gap: 4px; padding: 6px 8px; font-size: 11px; font-weight: 700;
+            text-decoration: none; border-radius: 4px; text-align: center;
+            transition: all 0.15s ease;
+        }
+        .btn-pano { background: #ea4335; color: white; }
+        .btn-pano:hover { background: #d93025; color: white; }
+        .btn-maps { background: #4285f4; color: white; }
+        .btn-maps:hover { background: #1a73e8; color: white; }
+
+        /* Bottom Status & Coordinate Tracker */
+        #coords-info {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 25px;
+            background: rgba(15, 23, 42, 0.92); color: white; z-index: 2000;
+            font-size: 11px; display: flex; align-items: center; justify-content: space-between;
+            padding: 0 14px; box-sizing: border-box; pointer-events: none;
+            letter-spacing: 0.3px;
+        }
+        .hidden-file { display: none; }
+        .chart-box { height: 160px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+<!-- Top Navigation & Direct Layer Actions -->
+<div class="top-nav">
+    <b>WEB GIS MAP BY: Dayamoy Ghosh,EE</b>
+    <button class="top-btn" onclick="document.getElementById('tif-upload').click()">📁 Open (LULC) TIFF</button>
+    <button class="top-btn blue" onclick="toggleDrawer('layers-panel')">🗂 Vector Layers (CSV/JSON)</button>
+    <button class="top-btn indigo" onclick="toggleDrawer('search-drawer')">🔍 Search (Lat/Lon &amp; Places)</button>
+    <button class="top-btn amber" onclick="toggleDrawer('analysis-panel')">📊 Analytics &amp; Dashboard</button>
+    <button class="top-btn slate" onclick="toggleDrawer('measure-panel')">📏 Measurement</button>
+    <input type="file" id="tif-upload" class="hidden-file" accept=".tif,.tiff">
+    <input type="file" id="vector-upload" class="hidden-file" accept=".geojson,.json,.kml,.csv">
+</div>
+
+<!-- Continuous Coordinate, Resolution & Status Bar -->
+<div id="coords-info">
+    <span id="coord-display">Lat: 0.00000 | Lon: 0.00000</span>
+    <span id="calc-mode-display">Cell: 0.0900 Ha (30m) | Right-click any point for Altitude &amp; Street View</span>
+</div>
+
+<div id="map"></div>
+
+<!-- 1. VECTOR LAYER MANAGER & OPACITY PANEL -->
+<div class="drawer-panel" id="layers-panel">
+    <div class="panel-title">
+        <span>Vector &amp; Raster Layer Manager</span>
+        <button class="panel-close-btn" onclick="toggleDrawer('layers-panel')">&times;</button>
+    </div>
+
+    <!-- Opacity Control for Sat/Basemap and TIFF -->
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 6px; margin-bottom: 10px;">
+        <b style="font-size: 11px; color: var(--primary);">Transparency Controls</b>
+        <div class="setting-group" style="margin-top: 6px;">
+            <label><span>Satellite / Basemap Opacity:</span> <span id="lbl-basemap-op">100%</span></label>
+            <input type="range" id="basemap-opacity" min="0" max="100" value="100" oninput="setBasemapOpacity(this.value)">
+        </div>
+        <div class="setting-group" style="margin-bottom: 0;">
+            <label><span>GeoTIFF Raster Opacity:</span> <span id="lbl-raster-op">75%</span></label>
+            <input type="range" id="layer-opacity" min="0" max="100" value="75" oninput="setRasterOpacity(this.value)">
+        </div>
+    </div>
+
+    <!-- Raster Layer Visibility Toggle -->
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; background: #e0f2fe; border: 1px solid #bae6fd; border-radius: 5px; margin-bottom: 10px;">
+        <span style="font-size: 11px; font-weight: 700; color: #0369a1;">GeoTIFF Overlay</span>
+        <label style="font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+            <input type="checkbox" id="chk-tif-visibility" checked onchange="toggleTifVisibility(this.checked)"> Show TIFF
+        </label>
+    </div>
+
+    <!-- Vector Upload Trigger -->
+    <div class="setting-group">
+        <button class="action-btn export-btn" onclick="document.getElementById('vector-upload').click()">+ Add Vector Layer (GeoJSON / KML / CSV)</button>
+        <span style="font-size: 10px; color: #64748b;">Auto-detects coordinates &amp; attributes.</span>
+    </div>
+
+    <!-- Active Layers List -->
+    <div id="vector-layers-list">
+        <div style="font-size: 11px; color: #94a3b8; text-align: center; padding: 10px 0;">No external vector layers loaded.</div>
+    </div>
+</div>
+
+<!-- 2. SMART SEARCH DRAWER (LAT/LON & ATTRIBUTE PLACE FINDER) -->
+<div class="drawer-panel" id="search-drawer">
+    <div class="panel-title">
+        <span>Search &amp; Spatial Locator</span>
+        <button class="panel-close-btn" onclick="toggleDrawer('search-drawer')">&times;</button>
+    </div>
+
+    <!-- Section A: Coordinate Jump -->
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+        <b style="font-size: 11px; color: var(--primary);">1. Lat / Lon Coordinate Locator</b>
+        <p style="font-size: 10px; color: #64748b; margin: 3px 0 6px 0;">Enter decimal degrees (e.g. 23.50, 87.52) to pin &amp; zoom.</p>
+        
+        <div style="display: flex; gap: 5px; margin-bottom: 5px;">
+            <input type="number" id="search-lat" placeholder="Latitude (e.g. 23.50)" step="any" style="flex:1; padding:5px; font-size:11px; border:1px solid #cbd5e1; border-radius:4px;">
+            <input type="number" id="search-lon" placeholder="Longitude (e.g. 87.52)" step="any" style="flex:1; padding:5px; font-size:11px; border:1px solid #cbd5e1; border-radius:4px;">
+        </div>
+        <button class="action-btn blue" onclick="goToCoordsFromInputs()">Pin Coordinates &amp; Zoom</button>
+    </div>
+
+    <!-- Section B: Smart Attribute & Place Search -->
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 6px;">
+        <b style="font-size: 11px; color: var(--primary);">2. Search Place / Point / Boundary</b>
+        <p style="font-size: 10px; color: #64748b; margin: 3px 0 6px 0;">Queries all properties (Mouza, District, Scheme, Village, Name) across uploaded layers.</p>
+        
+        <div style="display:flex; gap:4px;">
+            <input type="text" id="attribute-search-input" placeholder="Type Mouza, Scheme, District..." onkeyup="if(event.key==='Enter') executeAttributeSearch()">
+            <button class="action-btn find-btn" style="width:70px; margin:0;" onclick="executeAttributeSearch()">Find</button>
+        </div>
+
+        <div id="search-cycle-nav" style="display:none; justify-content:space-between; align-items:center; margin-top:6px; background:#e0e7ff; padding:4px 8px; border-radius:4px;">
+            <span id="search-count-label" style="font-size:11px; font-weight:bold; color:#3730a3;">0 found</span>
+            <div style="display:flex; gap:4px;">
+                <button class="sm-btn" onclick="cycleSearchResult(-1)">&larr; Prev</button>
+                <button class="sm-btn" onclick="cycleSearchResult(1)">Next &rarr;</button>
+            </div>
+        </div>
+
+        <div class="search-results-list" id="search-results-box" style="display:none;"></div>
+    </div>
+</div>
+
+<!-- 3. ANALYTICS & DASHBOARD PANEL -->
+<div class="drawer-panel" id="analysis-panel">
+    <div class="panel-title">
+        <span>Zonal Assessment &amp; Dashboard</span>
+        <button class="panel-close-btn" onclick="toggleDrawer('analysis-panel')">&times;</button>
+    </div>
+
+    <div class="setting-group">
+        <label><span>Raster Cell Factor Mode:</span></label>
+        <select id="cell-multiplier-mode" onchange="updateCellMultiplierMode()">
+            <option value="fixed" selected>Standard: 0.0900 Ha (30m Landsat/Sentinel)</option>
+            <option value="auto">Auto-Derive from TIFF Geotransform</option>
+        </select>
+    </div>
+
+    <button class="action-btn run-btn" id="start-calc-trigger" onclick="initiateCalculationWorkflow()">▶ Compute Area &amp; Point Stats</button>
+
+    <div class="progress-container" id="calc-progress-box">
+        <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="calc-progress-fill"></div>
+        </div>
+        <div class="progress-label" id="calc-progress-text">Initializing parameters...</div>
+    </div>
+
+    <!-- LULC Statistics Readout -->
+    <div class="crop-stat s-crop"><span>Single Crop (1):</span> <span><span id="val1">0.00</span> Ha</span></div>
+    <div class="crop-stat d-crop"><span>Double Crop (2):</span> <span><span id="val2">0.00</span> Ha</span></div>
+    <div class="crop-stat t-crop"><span>Triple Crop (3):</span> <span><span id="val3">0.00</span> Ha</span></div>
+    <div class="crop-stat o-crop"><span>Rangeland/Fallow (0):</span> <span><span id="val0">0.00</span> Ha</span></div>
+    <div class="crop-stat w-crop"><span>Water/Other (4-6):</span> <span><span id="valWater">0.00</span> Ha</span></div>
+    <div class="crop-stat total-area"><span>Total Gross Area:</span> <span><span id="valTotal">0.00</span> Ha</span></div>
+
+    <div style="display: flex; justify-content: space-between; font-size: 11px; color: #64748b; margin-top: 5px; padding: 0 2px;">
+        <span>Total Cropped (1+2+3):</span>
+        <strong id="valCropOnly" style="color: #0f172a;">0.00 Ha</strong>
+    </div>
+    <div style="font-size: 11px; color: #64748b; text-align: right; padding: 0 2px;" id="valAcre">0.00 Cropped Acres</div>
+
+    <!-- Point-in-Polygon Layer Intersect Readout -->
+    <div style="margin-top: 8px; border-top: 1px solid #e2e8f0; padding-top: 6px;">
+        <b style="font-size: 11px; color: var(--primary);">Points Inside Bounded Polygon:</b>
+        <div id="pip-summary" style="font-size: 11px; color: #334155; margin-top: 4px; max-height: 80px; overflow-y: auto;">
+            <i>Draw a polygon to count points.</i>
+        </div>
+    </div>
+
+    <!-- Interactive Chart Dashboard -->
+    <div class="chart-box">
+        <canvas id="cropChart"></canvas>
+    </div>
+
+    <div style="display: flex; gap: 6px;">
+        <button class="action-btn export-excel" onclick="exportStatsExcel()">📊 Excel (.xlsx)</button>
+        <button class="action-btn export-btn" onclick="exportStatsCSV()">📄 CSV</button>
+    </div>
+</div>
+
+<!-- 4. MEASUREMENT TOOLS PANEL -->
+<div class="drawer-panel" id="measure-panel">
+    <div class="panel-title">
+        <span>Measurement Tools</span>
+        <button class="panel-close-btn" onclick="toggleDrawer('measure-panel')">&times;</button>
+    </div>
+    <p style="font-size: 10px; color: #64748b; margin: 0 0 8px 0;">Select tool and click on the map. Double click to finish.</p>
+
+    <div style="display: flex; gap: 6px;">
+        <button class="action-btn blue" id="btn-measure-dist" onclick="startMeasure('distance')">📏 Measure Distance</button>
+        <button class="action-btn blue" id="btn-measure-area" onclick="startMeasure('area')">📐 Measure Area</button>
+    </div>
+    <button class="action-btn" style="background: #94a3b8; color: white;" onclick="clearMeasurements()">Clear Measurements</button>
+
+    <div class="measure-result-box" id="measure-output">
+        <b>Measurement Result:</b><br>
+        <span id="measure-val">No active measurement.</span>
+    </div>
+</div>
+
+<script>
+    // 1. Core Map Architecture & Tile Providers
+    const map = L.map('map', { 
+        preferCanvas: true,
+        zoomSnap: 0.5,
+        zoomDelta: 1
+    }).setView([23.92, 87.53], 10);
+
+    const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+        maxZoom: 22, attribution: '&copy; Google Hybrid'
+    }).addTo(map);
+
+    const googleStreets = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+        maxZoom: 22, attribution: '&copy; Google Streets'
+    });
+
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; OpenStreetMap'
+    });
+
+    let currentBasemap = googleHybrid;
+
+    L.control.layers({ 
+        "Google Hybrid (Satellite + Roads)": googleHybrid, 
+        "Google Street Map": googleStreets,
+        "OpenStreetMap": osm 
+    }, null, { position: 'topright' }).addTo(map);
+
+    map.on('baselayerchange', function(e) {
+        currentBasemap = e.layer;
+        const op = document.getElementById('basemap-opacity').value / 100;
+        currentBasemap.setOpacity(op);
+    });
+
+    // 2. State & Engine Management
+    let tiffImageInstance = null;
+    let baseOverviewData = null;
+    let overviewWidth = 0, overviewHeight = 0;
+    let calcWidth = 0, calcHeight = 0;
+    let calcBbox = null;
+    let activeLayerForCalc = null;
+    let currentRasterLayer = null;
+    let detailViewLayer = null;
+    let isProjected = false;
+
+    let activeMultiplier = 0.09;
+    let headerMultiplier = 0.09;
+
+    // Vector Layer Registry
+    let vectorLayers = [];
+    const PALETTE = ['#e11d48', '#2563eb', '#059669', '#d97706', '#7c3aed', '#0891b2', '#ea580c', '#4b5563'];
+    let paletteIdx = 0;
+
+    // Smart Search Results & Highlighting State
+    let searchResults = [];
+    let currentSearchIndex = -1;
+    let searchHighlightMarker = null;
+    let searchHighlightPolygon = null;
+
+    // Measurement Tool State
+    let measureMode = null;
+    let measurePoints = [];
+    let measureLayerGroup = L.layerGroup().addTo(map);
+
+    // Chart.js instance
+    let cropChartInstance = null;
+
+    function toggleDrawer(id) {
+        const p = document.getElementById(id);
+        const isOpen = (p.style.display === 'block');
+        document.querySelectorAll('.drawer-panel').forEach(d => d.style.display = 'none');
+        p.style.display = isOpen ? 'none' : 'block';
+    }
+
+    function setBasemapOpacity(val) {
+        document.getElementById('lbl-basemap-op').innerText = val + '%';
+        if (currentBasemap) currentBasemap.setOpacity(val / 100);
+    }
+
+    function setRasterOpacity(val) {
+        document.getElementById('lbl-raster-op').innerText = val + '%';
+        const opacity = val / 100;
+        if (currentRasterLayer) currentRasterLayer.setOpacity(opacity);
+        if (detailViewLayer) detailViewLayer.setOpacity(opacity);
+    }
+
+    function toggleTifVisibility(checked) {
+        if (!checked) {
+            if (currentRasterLayer && map.hasLayer(currentRasterLayer)) map.removeLayer(currentRasterLayer);
+            if (detailViewLayer && map.hasLayer(detailViewLayer)) map.removeLayer(detailViewLayer);
+        } else {
+            if (currentRasterLayer && !map.hasLayer(currentRasterLayer)) map.addLayer(currentRasterLayer);
+            if (detailViewLayer && !map.hasLayer(detailViewLayer)) map.addLayer(detailViewLayer);
+        }
+    }
+
+    function updateCellMultiplierMode() {
+        const mode = document.getElementById('cell-multiplier-mode').value;
+        activeMultiplier = (mode === 'fixed') ? 0.09 : headerMultiplier;
+        document.getElementById('calc-mode-display').innerText = `Cell: ${activeMultiplier.toFixed(4)} Ha | Dual-Opacity Engine Active`;
+    }
+
+    // 3. Geoman / Leaflet Draw Configuration
+    const drawnItems = new L.FeatureGroup().addTo(map);
+    const drawControl = new L.Control.Draw({
+        edit: { featureGroup: drawnItems },
+        draw: { circle: false, circlemarker: false, marker: true, polyline: true, rectangle: true, polygon: true }
+    });
+    map.addControl(drawControl);
+
+    map.on(L.Draw.Event.CREATED, (e) => {
+        drawnItems.clearLayers();
+        drawnItems.addLayer(e.layer);
+        activeLayerForCalc = e.layer;
+        resetCropDisplayFields();
+        document.getElementById('analysis-panel').style.display = 'block';
+        countPointsInsideActivePolygon();
+    });
+
+    // 4. Robust Universal GeoTIFF File Ingestion (Safe Memory Streaming)
+    document.getElementById('tif-upload').addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            const tiff = await GeoTIFF.fromBlob(file);
+            tiffImageInstance = await tiff.getImage();
+
+            calcWidth = tiffImageInstance.getWidth();
+            calcHeight = tiffImageInstance.getHeight();
+            calcBbox = tiffImageInstance.getBoundingBox();
+
+            isProjected = (calcBbox[0] > 180 || calcBbox[0] < -180);
+
+            const rx = (calcBbox[2] - calcBbox[0]) / calcWidth;
+            const ry = (calcBbox[3] - calcBbox[1]) / calcHeight;
+
+            if (isProjected) {
+                proj4.defs("EPSG:32645", "+proj=utm +zone=45 +datum=WGS84 +units=m +no_defs");
+                headerMultiplier = (Math.abs(rx) * Math.abs(ry)) / 10000;
+            } else {
+                const midLat = (calcBbox[1] + calcBbox[3]) / 2;
+                const mLat = 111320;
+                const mLon = 111320 * Math.cos(midLat * Math.PI / 180);
+                headerMultiplier = (Math.abs(rx) * mLon * Math.abs(ry) * mLat) / 10000;
+            }
+
+            const maxOverviewDim = 2048;
+            let scale = 1;
+            if (calcWidth > maxOverviewDim || calcHeight > maxOverviewDim) {
+                scale = Math.min(maxOverviewDim / calcWidth, maxOverviewDim / calcHeight);
+            }
+            overviewWidth = Math.round(calcWidth * scale);
+            overviewHeight = Math.round(calcHeight * scale);
+
+            const overviewRasters = await tiffImageInstance.readRasters({
+                width: overviewWidth,
+                height: overviewHeight,
+                resampleMethod: 'nearest'
+            });
+            baseOverviewData = overviewRasters[0];
+
+            renderBaseOverview(baseOverviewData, overviewWidth, overviewHeight, calcBbox);
+            updateCellMultiplierMode();
+            
+            let fitBbox = calcBbox;
+            if (isProjected) {
+                const sw = proj4("EPSG:32645", "EPSG:4326", [calcBbox[0], calcBbox[1]]);
+                const ne = proj4("EPSG:32645", "EPSG:4326", [calcBbox[2], calcBbox[3]]);
+                fitBbox = [sw[0], sw[1], ne[0], ne[1]];
+            }
+            map.fitBounds([[fitBbox[1], fitBbox[0]], [fitBbox[3], fitBbox[2]]]);
+        } catch (err) {
+            console.error(err);
+            alert("Error loading GeoTIFF: " + err.message);
+        }
+    });
+
+    // 5. Render Base Overview Overlay
+    function renderBaseOverview(data, w, h, bbox) {
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+
+        const img = ctx.createImageData(w, h);
+        const d = img.data;
+
+        for (let idx = 0; idx < w * h; idx++) {
+            const val = data[idx];
+            const i = idx * 4;
+
+            if (val === 1) { d[i] = 255; d[i+1] = 255; d[i+2] = 0; d[i+3] = 230; }
+            else if (val === 2) { d[i] = 104; d[i+1] = 211; d[i+2] = 0; d[i+3] = 230; }
+            else if (val === 3) { d[i] = 0; d[i+1] = 100; d[i+2] = 0; d[i+3] = 230; }
+            else if (val === 0) { d[i] = 189; d[i+1] = 189; d[i+2] = 189; d[i+3] = 180; }
+            else if (val === 4) { d[i] = 0; d[i+1] = 0; d[i+2] = 255; d[i+3] = 200; }
+            else if (val === 5) { d[i] = 0; d[i+1] = 255; d[i+2] = 255; d[i+3] = 200; }
+            else if (val === 6) { d[i] = 255; d[i+1] = 153; d[i+2] = 0; d[i+3] = 200; }
+            else { d[i+3] = 0; }
+        }
+        ctx.putImageData(img, 0, 0);
+
+        if (currentRasterLayer) map.removeLayer(currentRasterLayer);
+
+        let bounds;
+        if (isProjected) {
+            const sw = proj4("EPSG:32645", "EPSG:4326", [bbox[0], bbox[1]]);
+            const ne = proj4("EPSG:32645", "EPSG:4326", [bbox[2], bbox[3]]);
+            bounds = [[sw[1], sw[0]], [ne[1], ne[0]]];
+        } else {
+            bounds = [[bbox[1], bbox[0]], [bbox[3], bbox[2]]];
+        }
+
+        const opacity = document.getElementById('layer-opacity').value / 100;
+        currentRasterLayer = L.imageOverlay(canvas.toDataURL(), bounds, { 
+            opacity: opacity,
+            className: 'crisp-pixels',
+            interactive: false
+        });
+
+        if (document.getElementById('chk-tif-visibility').checked) {
+            currentRasterLayer.addTo(map);
+        }
+    }
+
+    // 6. Dynamic High-Zoom Native Viewport (Zoom >= 14)
+    map.on('moveend', async function() {
+        if (!tiffImageInstance || !calcBbox) return;
+        if (!document.getElementById('chk-tif-visibility').checked) return;
+
+        const currentZoom = map.getZoom();
+        if (currentZoom < 14) {
+            if (detailViewLayer) {
+                map.removeLayer(detailViewLayer);
+                detailViewLayer = null;
+            }
+            return;
+        }
+
+        const mapBounds = map.getBounds();
+        const rx = (calcBbox[2] - calcBbox[0]) / calcWidth;
+        const ry = (calcBbox[3] - calcBbox[1]) / calcHeight;
+
+        let west = mapBounds.getWest(), east = mapBounds.getEast(), north = mapBounds.getNorth(), south = mapBounds.getSouth();
+        if (isProjected) {
+            const sw = proj4("EPSG:4326", "EPSG:32645", [west, south]);
+            const ne = proj4("EPSG:4326", "EPSG:32645", [east, north]);
+            west = sw[0]; south = sw[1];
+            east = ne[0]; north = ne[1];
+        }
+
+        let colStart = Math.max(0, Math.floor((west - calcBbox[0]) / rx));
+        let colEnd = Math.min(calcWidth, Math.ceil((east - calcBbox[0]) / rx));
+        let rowStart = Math.max(0, Math.floor((calcBbox[3] - north) / ry));
+        let rowEnd = Math.min(calcHeight, Math.ceil((calcBbox[3] - south) / ry));
+
+        if (colEnd <= colStart || rowEnd <= rowStart) return;
+
+        const winW = colEnd - colStart;
+        const winH = rowEnd - rowStart;
+
+        if (winW > 2048 || winH > 2048) return;
+
+        try {
+            const detailRaster = await tiffImageInstance.readRasters({
+                window: [colStart, rowStart, colEnd, rowEnd]
+            });
+            const dData = detailRaster[0];
+
+            const canvas = document.createElement('canvas');
+            canvas.width = winW; canvas.height = winH;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+
+            const img = ctx.createImageData(winW, winH);
+            const d = img.data;
+
+            for (let i = 0; i < winW * winH; i++) {
+                const val = dData[i];
+                const px = i * 4;
+                if (val === 1) { d[px] = 255; d[px+1] = 255; d[px+2] = 0; d[px+3] = 240; }
+                else if (val === 2) { d[px] = 104; d[px+1] = 211; d[px+2] = 0; d[px+3] = 240; }
+                else if (val === 3) { d[px] = 0; d[px+1] = 100; d[px+2] = 0; d[px+3] = 240; }
+                else if (val === 0) { d[px] = 189; d[px+1] = 189; d[px+2] = 189; d[px+3] = 200; }
+                else if (val === 4) { d[px] = 0; d[px+1] = 0; d[px+2] = 255; d[px+3] = 220; }
+                else if (val === 5) { d[px] = 0; d[px+1] = 255; d[px+2] = 255; d[px+3] = 220; }
+                else if (val === 6) { d[px] = 255; d[px+1] = 153; d[px+2] = 0; d[px+3] = 220; }
+                else { d[px+3] = 0; }
+            }
+            ctx.putImageData(img, 0, 0);
+
+            let detailBounds;
+            if (isProjected) {
+                const sw = proj4("EPSG:32645", "EPSG:4326", [calcBbox[0] + colStart * rx, calcBbox[3] - rowEnd * ry]);
+                const ne = proj4("EPSG:32645", "EPSG:4326", [calcBbox[0] + colEnd * rx, calcBbox[3] - rowStart * ry]);
+                detailBounds = [[sw[1], sw[0]], [ne[1], ne[0]]];
+            } else {
+                detailBounds = [
+                    [calcBbox[3] - rowEnd * ry, calcBbox[0] + colStart * rx],
+                    [calcBbox[3] - rowStart * ry, calcBbox[0] + colEnd * rx]
+                ];
+            }
+
+            if (detailViewLayer) map.removeLayer(detailViewLayer);
+            const opacity = document.getElementById('layer-opacity').value / 100;
+            detailViewLayer = L.imageOverlay(canvas.toDataURL(), detailBounds, {
+                opacity: opacity,
+                className: 'crisp-pixels',
+                interactive: false
+            }).addTo(map);
+        } catch (err) {
+            console.warn("Viewport detail error:", err);
+        }
+    });
+
+    // 7. Interactive Single Pixel Inspector Tool (Left Click)
+    map.on('click', async function(e) {
+        if (measureMode) return;
+        if (!tiffImageInstance || !calcBbox) return;
+
+        let lng = e.latlng.lng;
+        let lat = e.latlng.lat;
+
+        if (isProjected) {
+            const p = proj4("EPSG:4326", "EPSG:32645", [lng, lat]);
+            lng = p[0]; lat = p[1];
+        }
+
+        const rx = (calcBbox[2] - calcBbox[0]) / calcWidth;
+        const ry = (calcBbox[3] - calcBbox[1]) / calcHeight;
+
+        const col = Math.floor((lng - calcBbox[0]) / rx);
+        const row = Math.floor((calcBbox[3] - lat) / ry);
+
+        if (col >= 0 && col < calcWidth && row >= 0 && row < calcHeight) {
+            const pxData = await tiffImageInstance.readRasters({
+                window: [col, row, col + 1, row + 1]
+            });
+            const val = pxData[0][0];
+
+            const labels = {
+                0: "Rangeland / Fallow / Buildup",
+                1: "Single Crop",
+                2: "Double Crop",
+                3: "Triple Crop",
+                4: "Water Body",
+                5: "Plantation / Forest",
+                6: "Wasteland / Rocky"
+            };
+            const labelName = labels[val] || `Class ${val}`;
+            L.popup()
+                .setLatLng(e.latlng)
+                .setContent(`
+                    <div style="font-size:12px; line-height:1.5;">
+                        <b style="color:#1e3a8a;">LULC Cell Inspector</b><br>
+                        <b>Class Value:</b> ${val} (${labelName})<br>
+                        <b>Raster Index:</b> Row ${row}, Col ${col}<br>
+                        <b>Coordinates:</b> ${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}
+                    </div>
+                `)
+                .openOn(map);
+        }
+    });
+
+    // 8. NEW: Right-Click (contextmenu) Altitude & Google Street View / Photography Card
+    map.on('contextmenu', async function(e) {
+        L.DomEvent.preventDefault(e);
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+
+        // Convert to Degrees Minutes Seconds (DMS) format
+        const dmsLat = toDMS(lat, true);
+        const dmsLng = toDMS(lng, false);
+
+        // Check if falls inside any loaded vector boundary
+        let containedLayerNames = [];
+        vectorLayers.forEach(vl => {
+            if (!map.hasLayer(vl.layer)) return;
+            vl.layer.eachLayer(l => {
+                if ((l instanceof L.Polygon || l instanceof L.Rectangle) && isPointInPoly(e.latlng, l)) {
+                    const p = l.feature && l.feature.properties ? l.feature.properties : null;
+                    let desc = vl.name;
+                    if (p) {
+                        const sub = p.MOUZA || p.mouza || p.BLOCK || p.block || p.DISTRICT || p.district || p.Name || p.name;
+                        if (sub) desc += ` (${sub})`;
+                    }
+                    containedLayerNames.push(desc);
+                }
+            });
+        });
+
+        // Initialize Loading Popup immediately at clicked location
+        const popup = L.popup({ maxWidth: 330 })
+            .setLatLng(e.latlng)
+            .setContent(`
+                <div class="elevation-popup-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding-bottom:4px;">
+                        <b style="color:var(--primary); font-size:12px;">⛰️ Terrain &amp; Street View</b>
+                        <span style="font-size:10px; color:#64748b;">Right-Click Inspector</span>
+                    </div>
+                    <div style="font-size:11px; color:#475569; margin:6px 0;">
+                        <b>Lat:</b> ${lat.toFixed(6)} | <b>Lon:</b> ${lng.toFixed(6)}<br>
+                        <span style="font-size:10px; color:#94a3b8;">${dmsLat}, ${dmsLng}</span>
+                    </div>
+                    <div class="elevation-badge" id="elev-badge-box">
+                        <div>
+                            <div style="font-size:10px; opacity:0.85;">GROUND ELEVATION (MSL)</div>
+                            <div class="elev-main" id="elev-val-display">Fetching...</div>
+                        </div>
+                        <div class="elev-sub" id="elev-sub-display">Querying SRTM...</div>
+                    </div>
+                    ${containedLayerNames.length ? `<div style="font-size:10px; background:#f1f5f9; padding:4px 6px; border-radius:4px; margin-bottom:6px;">📍 <b>Boundary:</b> ${containedLayerNames.slice(0, 2).join(', ')}</div>` : ''}
+                    <div style="font-size:11px; font-weight:bold; color:var(--dark); margin-top:6px;">📷 Google Street View &amp; Photography</div>
+                    <div class="streetview-thumbnail-container">
+                        <iframe loading="lazy" allowfullscreen src="https://maps.google.com/maps?q=${lat},${lng}&layer=c&cbll=${lat},${lng}&cbp=11,0,0,0,0&output=svembed"></iframe>
+                    </div>
+                    <div class="streetview-btn-row">
+                        <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}" target="_blank" rel="noopener noreferrer" class="streetview-btn btn-pano">
+                            🌐 360° Panorama
+                        </a>
+                        <a href="https://www.google.com/maps/search/?api=1&query=${lat},${lng}" target="_blank" rel="noopener noreferrer" class="streetview-btn btn-maps">
+                            🗺️ Google Maps
+                        </a>
+                    </div>
+                </div>
+            `)
+            .openOn(map);
+
+        // Asynchronously Fetch Ground Elevation with Fallbacks
+        fetchElevationData(lat, lng).then(result => {
+            const elevDisplay = document.getElementById('elev-val-display');
+            const elevSub = document.getElementById('elev-sub-display');
+            if (elevDisplay && elevSub) {
+                if (result && result.elevation !== null && result.elevation !== undefined) {
+                    const m = Math.round(result.elevation);
+                    const ft = Math.round(result.elevation * 3.28084);
+                    elevDisplay.innerText = `${m} m`;
+                    elevSub.innerHTML = `<span>${ft} ft</span><br><span style="font-size:9px; opacity:0.8;">${result.dataset || 'SRTM 30m'}</span>`;
+                } else {
+                    elevDisplay.innerText = "N/A";
+                    elevSub.innerText = "Elevation Unavailable";
+                }
+            }
+        });
+    });
+
+    async function fetchElevationData(lat, lng) {
+        // Source 1: OpenTopoData SRTM 30m
+        try {
+            const res = await fetch(`https://api.opentopodata.org/v1/srtm30m?locations=${lat},${lng}`, { signal: AbortSignal.timeout(3500) });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.results && data.results.length > 0 && data.results[0].elevation !== null) {
+                    return { elevation: data.results[0].elevation, dataset: 'SRTM 30m' };
+                }
+            }
+        } catch (e1) {
+            console.warn("OpenTopoData lookup failed, trying fallback...", e1);
+        }
+
+        // Source 2: Open-Elevation Fallback API
+        try {
+            const res2 = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${lat},${lng}`, { signal: AbortSignal.timeout(3500) });
+            if (res2.ok) {
+                const data2 = await res2.json();
+                if (data2.results && data2.results.length > 0 && data2.results[0].elevation !== null) {
+                    return { elevation: data2.results[0].elevation, dataset: 'Open-Elevation' };
+                }
+            }
+        } catch (e2) {
+            console.warn("Open-Elevation fallback failed", e2);
+        }
+
+        return { elevation: null, dataset: null };
+    }
+
+    function toDMS(deg, isLat) {
+        const absolute = Math.abs(deg);
+        const degrees = Math.floor(absolute);
+        const minutesNotTruncated = (absolute - degrees) * 60;
+        const minutes = Math.floor(minutesNotTruncated);
+        const seconds = Math.floor((minutesNotTruncated - minutes) * 60);
+        let direction = "";
+        if (isLat) {
+            direction = deg >= 0 ? "N" : "S";
+        } else {
+            direction = deg >= 0 ? "E" : "W";
+        }
+        return `${degrees}°${minutes}'${seconds}" ${direction}`;
+    }
+
+    // 9. Vector Layer Ingestion Engine (GeoJSON, KML, CSV)
+    document.getElementById('vector-upload').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const ext = file.name.split('.').pop().toLowerCase();
+        const reader = new FileReader();
+
+        reader.onload = function(evt) {
+            const content = evt.target.result;
+            const assignedColor = PALETTE[paletteIdx % PALETTE.length];
+            paletteIdx++;
+
+            if (ext === 'geojson' || ext === 'json') {
+                try {
+                    const geojsonData = JSON.parse(content);
+                    addGeoJsonLayer(geojsonData, file.name, assignedColor);
+                } catch (err) { alert("Invalid GeoJSON: " + err.message); }
+            } else if (ext === 'kml') {
+                try {
+                    const kmlLayer = omnivore.kml.parse(content);
+                    kmlLayer.on('ready', function() {
+                        const geojsonData = kmlLayer.toGeoJSON();
+                        addGeoJsonLayer(geojsonData, file.name, assignedColor);
+                    });
+                } catch (err) { alert("Invalid KML: " + err.message); }
+            } else if (ext === 'csv') {
+                try {
+                    parseCSVToLayer(content, file.name, assignedColor);
+                } catch (err) { alert("Invalid CSV: " + err.message); }
+            }
+        };
+
+        if (ext === 'csv') reader.readAsText(file);
+        else reader.readAsText(file);
+    });
+
+    function parseCSVToLayer(csvText, fileName, color) {
+        const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+        const rows = parsed.data;
+        if (!rows.length) { alert("CSV file contains no data rows."); return; }
+
+        const keys = Object.keys(rows[0]);
+        const latKey = keys.find(k => /^(lat|latitude|y)$/i.test(k.trim()));
+        const lonKey = keys.find(k => /^(lon|lng|longitude|x)$/i.test(k.trim()));
+
+        if (!latKey || !lonKey) {
+            alert("Could not auto-detect Latitude and Longitude columns in CSV. Looked for: lat, latitude, y, lon, lng, longitude, x.");
+            return;
+        }
+
+        const features = [];
+        rows.forEach((r, idx) => {
+            const lat = parseFloat(r[latKey]);
+            const lon = parseFloat(r[lonKey]);
+            if (!isNaN(lat) && !isNaN(lon)) {
+                features.push({
+                    type: "Feature",
+                    id: idx,
+                    properties: r,
+                    geometry: { type: "Point", coordinates: [lon, lat] }
+                });
+            }
+        });
+
+        const geojson = { type: "FeatureCollection", features: features };
+        addGeoJsonLayer(geojson, fileName, color);
+    }
+
+    function addGeoJsonLayer(geojsonData, fileName, color) {
+        const layerId = 'layer_' + Date.now();
+        let pointCount = 0;
+        let polyCount = 0;
+
+        const leafletLayer = L.geoJSON(geojsonData, {
+            style: function() {
+                return { color: color, weight: 2.5, opacity: 0.85, fillColor: color, fillOpacity: 0.25 };
+            },
+            pointToLayer: function(feat, latlng) {
+                pointCount++;
+                return L.circleMarker(latlng, {
+                    radius: 6,
+                    fillColor: color,
+                    color: "#fff",
+                    weight: 1.5,
+                    opacity: 1,
+                    fillOpacity: 0.85
+                });
+            },
+            onEachFeature: function(feat, layer) {
+                if (feat.geometry && feat.geometry.type.includes('Polygon')) polyCount++;
+                let popHtml = `<div style="font-size:11px; max-height:160px; overflow-y:auto;"><b style="color:var(--primary);">${fileName}</b><hr style="margin:4px 0; border:0; border-top:1px solid #eee;"><table style="width:100%; border-collapse:collapse;">`;
+                for (let k in feat.properties) {
+                    popHtml += `<tr><td style="color:#64748b; font-weight:bold; padding:2px; vertical-align:top;">${k}:</td><td style="padding:2px;">${feat.properties[k]}</td></tr>`;
+                }
+                popHtml += `</table></div>`;
+                layer.bindPopup(popHtml);
+            }
+        }).addTo(map);
+
+        const bounds = leafletLayer.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds);
+
+        const totalFeats = geojsonData.features ? geojsonData.features.length : 1;
+        vectorLayers.push({
+            id: layerId,
+            name: fileName,
+            color: color,
+            layer: leafletLayer,
+            geojson: geojsonData,
+            pointCount: pointCount,
+            polyCount: polyCount,
+            totalFeatures: totalFeats
+        });
+
+        renderVectorLayerUI();
+    }
+
+    function renderVectorLayerUI() {
+        const container = document.getElementById('vector-layers-list');
+        if (!vectorLayers.length) {
+            container.innerHTML = `<div style="font-size: 11px; color: #94a3b8; text-align: center; padding: 10px 0;">No external vector layers loaded.</div>`;
+            return;
+        }
+
+        container.innerHTML = '';
+        vectorLayers.forEach(vl => {
+            const card = document.createElement('div');
+            card.className = 'layer-item-card';
+            card.innerHTML = `
+                <div class="layer-item-header">
+                    <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+                        <input type="checkbox" id="chk_${vl.id}" checked onchange="toggleVectorLayer('${vl.id}', this.checked)">
+                        <span class="layer-name-tag" title="${vl.name}">${vl.name}</span>
+                    </label>
+                    <div class="layer-item-tools">
+                        <input type="color" class="color-picker-input" value="${vl.color}" onchange="changeLayerColor('${vl.id}', this.value)" title="Change Layer Color">
+                        <button class="sm-btn" onclick="zoomToLayer('${vl.id}')" title="Zoom to Layer">🔍</button>
+                        <button class="sm-btn del" onclick="deleteVectorLayer('${vl.id}')" title="Delete Layer">&times;</button>
+                    </div>
+                </div>
+                <div style="font-size:10px; color:#64748b; margin-top:4px;">
+                    Features: <b>${vl.totalFeatures}</b> ${vl.pointCount > 0 ? `(${vl.pointCount} points)` : ''} ${vl.polyCount > 0 ? `(${vl.polyCount} polys)` : ''}
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function toggleVectorLayer(id, visible) {
+        const vl = vectorLayers.find(l => l.id === id);
+        if (!vl) return;
+        if (visible) map.addLayer(vl.layer);
+        else map.removeLayer(vl.layer);
+        countPointsInsideActivePolygon();
+    }
+
+    function changeLayerColor(id, newColor) {
+        const vl = vectorLayers.find(l => l.id === id);
+        if (!vl) return;
+        vl.color = newColor;
+        vl.layer.eachLayer(layer => {
+            if (layer.setStyle) layer.setStyle({ color: newColor, fillColor: newColor });
+        });
+    }
+
+    function zoomToLayer(id) {
+        const vl = vectorLayers.find(l => l.id === id);
+        if (!vl) return;
+        const bounds = vl.layer.getBounds();
+        if (bounds.isValid()) map.fitBounds(bounds);
+    }
+
+    function deleteVectorLayer(id) {
+        const idx = vectorLayers.findIndex(l => l.id === id);
+        if (idx === -1) return;
+        map.removeLayer(vectorLayers[idx].layer);
+        vectorLayers.splice(idx, 1);
+        renderVectorLayerUI();
+        countPointsInsideActivePolygon();
+    }
+
+    // 10. Coordinate Search & Panning with Pulsing Pin
+    function goToCoordsFromInputs() {
+        const lat = parseFloat(document.getElementById('search-lat').value);
+        const lon = parseFloat(document.getElementById('search-lon').value);
+
+        if (isNaN(lat) || isNaN(lon)) {
+            alert("Please provide valid numeric Latitude and Longitude values.");
+            return;
+        }
+
+        clearSearchHighlights();
+
+        const pulseIcon = L.divIcon({
+            className: 'pulse-marker-icon',
+            html: '<div class="pulse-wave"></div><div class="pulse-dot"></div>',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+
+        searchHighlightMarker = L.marker([lat, lon], { icon: pulseIcon }).addTo(map);
+
+        let containerPolyName = null;
+        vectorLayers.forEach(vl => {
+            if (!map.hasLayer(vl.layer)) return;
+            vl.layer.eachLayer(layer => {
+                if (layer instanceof L.Polygon || layer instanceof L.Rectangle) {
+                    if (isPointInPoly(L.latLng(lat, lon), layer)) {
+                        highlightPolygonBoundary(layer);
+                        containerPolyName = vl.name;
+                    }
+                }
+            });
+        });
+
+        let popupText = `<div style="font-size:12px; line-height:1.4;">
+            <b style="color:#b91c1c;">📍 Pinned Coordinates</b><br>
+            <b>Lat:</b> ${lat.toFixed(5)}<br>
+            <b>Lon:</b> ${lon.toFixed(5)}<br>
+            ${containerPolyName ? `<span style="color:#1e3a8a; font-size:11px;">Inside: <b>${containerPolyName}</b></span>` : ''}
+        </div>`;
+
+        searchHighlightMarker.bindPopup(popupText).openPopup();
+        map.flyTo([lat, lon], 16, { duration: 1.2 });
+    }
+
+    // 11. Smart Place / Attribute Search (Points & Boundaries Matching)
+    function executeAttributeSearch() {
+        const query = document.getElementById('attribute-search-input').value.trim().toLowerCase();
+        if (!query) return;
+
+        clearSearchHighlights();
+        searchResults = [];
+        currentSearchIndex = -1;
+
+        vectorLayers.forEach(vl => {
+            if (!map.hasLayer(vl.layer)) return;
+
+            vl.layer.eachLayer(layer => {
+                const feat = layer.feature;
+                if (!feat || !feat.properties) return;
+
+                const props = feat.properties;
+                let isMatch = false;
+                let matchedKey = '';
+                let matchedVal = '';
+
+                for (let key in props) {
+                    const valStr = String(props[key] || '').toLowerCase();
+                    if (valStr.includes(query)) {
+                        isMatch = true;
+                        matchedKey = key;
+                        matchedVal = String(props[key]);
+                        break;
+                    }
+                }
+
+                if (isMatch) {
+                    let centerLatLng = null;
+                    const isPolygon = (layer instanceof L.Polygon || layer instanceof L.Rectangle);
+                    const isPoint = (layer instanceof L.CircleMarker || layer instanceof L.Marker);
+
+                    if (isPoint && layer.getLatLng) {
+                        centerLatLng = layer.getLatLng();
+                    } else if (isPolygon && layer.getBounds) {
+                        centerLatLng = layer.getBounds().getCenter();
+                    }
+
+                    searchResults.push({
+                        layerRef: layer,
+                        sourceName: vl.name,
+                        isPolygon: isPolygon,
+                        isPoint: isPoint,
+                        latlng: centerLatLng,
+                        matchedKey: matchedKey,
+                        matchedVal: matchedVal,
+                        properties: props
+                    });
+                }
+            });
+        });
+
+        const countBox = document.getElementById('search-cycle-nav');
+        const resultsBox = document.getElementById('search-results-box');
+
+        if (searchResults.length === 0) {
+            countBox.style.display = 'none';
+            resultsBox.style.display = 'block';
+            resultsBox.innerHTML = `<div style="padding:8px; color:#b91c1c; font-size:11px; text-align:center;">No matching place, point, or boundary found for "${query}".</div>`;
+            return;
+        }
+
+        countBox.style.display = 'flex';
+        resultsBox.style.display = 'block';
+        resultsBox.innerHTML = '';
+
+        searchResults.forEach((res, i) => {
+            const item = document.createElement('div');
+            item.className = 'search-result-item';
+            item.id = `search_res_${i}`;
+            item.innerHTML = `
+                <div>
+                    <b>${res.matchedVal}</b> <span style="color:#64748b; font-size:10px;">(${res.matchedKey})</span><br>
+                    <span style="font-size:10px; color:#94a3b8;">${res.sourceName}</span>
+                </div>
+                <span class="search-result-tag">${res.isPolygon ? 'Polygon' : 'Point'}</span>
+            `;
+            item.onclick = () => focusSearchResult(i);
+            resultsBox.appendChild(item);
+        });
+
+        focusSearchResult(0);
+    }
+
+    function cycleSearchResult(dir) {
+        if (!searchResults.length) return;
+        let nextIdx = currentSearchIndex + dir;
+        if (nextIdx < 0) nextIdx = searchResults.length - 1;
+        if (nextIdx >= searchResults.length) nextIdx = 0;
+        focusSearchResult(nextIdx);
+    }
+
+    function focusSearchResult(idx) {
+        if (idx < 0 || idx >= searchResults.length) return;
+        currentSearchIndex = idx;
+        const res = searchResults[idx];
+
+        document.getElementById('search-count-label').innerText = `${idx + 1} of ${searchResults.length} found`;
+        document.querySelectorAll('.search-result-item').forEach((el, i) => {
+            el.classList.toggle('active', i === idx);
+        });
+
+        clearSearchHighlights();
+
+        if (res.isPolygon) {
+            highlightPolygonBoundary(res.layerRef);
+            map.flyToBounds(res.layerRef.getBounds(), { padding: [40, 40], maxZoom: 16, duration: 1 });
+            res.layerRef.openPopup();
+        } else if (res.isPoint) {
+            const latlng = res.latlng;
+            
+            const pulseIcon = L.divIcon({
+                className: 'pulse-marker-icon',
+                html: '<div class="pulse-wave"></div><div class="pulse-dot"></div>',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+            searchHighlightMarker = L.marker(latlng, { icon: pulseIcon }).addTo(map);
+
+            vectorLayers.forEach(vl => {
+                if (!map.hasLayer(vl.layer)) return;
+                vl.layer.eachLayer(polyLayer => {
+                    if ((polyLayer instanceof L.Polygon || polyLayer instanceof L.Rectangle) && isPointInPoly(latlng, polyLayer)) {
+                        highlightPolygonBoundary(polyLayer);
+                    }
+                });
+            });
+
+            map.flyTo(latlng, 16, { duration: 1 });
+            res.layerRef.openPopup();
+        }
+    }
+
+    function highlightPolygonBoundary(polygonLayer) {
+        if (searchHighlightPolygon) {
+            map.removeLayer(searchHighlightPolygon);
+            searchHighlightPolygon = null;
+        }
+
+        searchHighlightPolygon = L.polygon(polygonLayer.getLatLngs(), {
+            color: '#facc15',
+            weight: 5,
+            dashArray: '6, 8',
+            fillColor: '#fde047',
+            fillOpacity: 0.35,
+            interactive: false
+        }).addTo(map);
+    }
+
+    function clearSearchHighlights() {
+        if (searchHighlightMarker) {
+            map.removeLayer(searchHighlightMarker);
+            searchHighlightMarker = null;
+        }
+        if (searchHighlightPolygon) {
+            map.removeLayer(searchHighlightPolygon);
+            searchHighlightPolygon = null;
+        }
+    }
+
+    // 12. Point-In-Polygon Counter (Counts points from active vector layers inside drawn polygon)
+    function countPointsInsideActivePolygon() {
+        const summaryBox = document.getElementById('pip-summary');
+        if (!activeLayerForCalc) {
+            summaryBox.innerHTML = `<i>Draw a polygon to count points.</i>`;
+            return;
+        }
+
+        let totalInside = 0;
+        let html = '';
+
+        vectorLayers.forEach(vl => {
+            if (!map.hasLayer(vl.layer) || vl.pointCount === 0) return;
+            let layerPointsInside = 0;
+
+            vl.layer.eachLayer(layer => {
+                if (layer.getLatLng) {
+                    const latlng = layer.getLatLng();
+                    if (isPointInPoly(latlng, activeLayerForCalc)) {
+                        layerPointsInside++;
+                    }
+                }
+            });
+
+            totalInside += layerPointsInside;
+            html += `<div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                <span><span style="display:inline-block; width:8px; height:8px; background:${vl.color}; border-radius:50%; margin-right:4px;"></span>${vl.name}:</span>
+                <b>${layerPointsInside} pts</b>
+            </div>`;
+        });
+
+        if (totalInside === 0 && !html) {
+            summaryBox.innerHTML = `<i>No active point layers intersect this boundary.</i>`;
+        } else {
+            summaryBox.innerHTML = `<div style="border-bottom:1px solid #cbd5e1; padding-bottom:3px; margin-bottom:4px;"><b>Total Points Inside: ${totalInside}</b></div>` + html;
+        }
+    }
+
+    // 13. Measurement Suite (Geodesic Distance & Area)
+    function startMeasure(mode) {
+        clearMeasurements();
+        measureMode = mode;
+        map.getContainer().style.cursor = 'crosshair';
+        document.getElementById('measure-val').innerText = `Click on map to draw ${mode}...`;
+        document.getElementById('btn-measure-dist').style.opacity = (mode === 'distance') ? '0.7' : '1';
+        document.getElementById('btn-measure-area').style.opacity = (mode === 'area') ? '0.7' : '1';
+    }
+
+    map.on('click', function(e) {
+        if (!measureMode) return;
+        measurePoints.push(e.latlng);
+        drawMeasurementGraphics();
+    });
+
+    map.on('dblclick', function(e) {
+        if (!measureMode) return;
+        L.DomEvent.stop(e);
+        measureMode = null;
+        map.getContainer().style.cursor = '';
+        document.getElementById('btn-measure-dist').style.opacity = '1';
+        document.getElementById('btn-measure-area').style.opacity = '1';
+    });
+
+    function drawMeasurementGraphics() {
+        measureLayerGroup.clearLayers();
+        if (measurePoints.length === 0) return;
+
+        measurePoints.forEach(pt => {
+            L.circleMarker(pt, { radius: 4, color: '#d97706', fillOpacity: 1 }).addTo(measureLayerGroup);
+        });
+
+        if (measureMode === 'distance') {
+            if (measurePoints.length > 1) {
+                const line = L.polyline(measurePoints, { color: '#d97706', weight: 3, dashArray: '4, 6' }).addTo(measureLayerGroup);
+                let totalDistM = 0;
+                for (let i = 0; i < measurePoints.length - 1; i++) {
+                    totalDistM += measurePoints[i].distanceTo(measurePoints[i+1]);
+                }
+                const km = totalDistM / 1000;
+                document.getElementById('measure-val').innerHTML = `
+                    <b>Distance:</b> ${totalDistM.toFixed(1)} m (${km.toFixed(3)} km)<br>
+                    <span style="font-size:10px; color:#64748b;">Double-click map to finish.</span>
+                `;
+            }
+        } else if (measureMode === 'area') {
+            if (measurePoints.length > 2) {
+                const poly = L.polygon(measurePoints, { color: '#d97706', weight: 2.5, fillColor: '#f59e0b', fillOpacity: 0.2 }).addTo(measureLayerGroup);
+                const areaSqM = getPolygonAreaM2(measurePoints);
+                const ha = areaSqM / 10000;
+                const acres = ha * 2.47105;
+                document.getElementById('measure-val').innerHTML = `
+                    <b>Area:</b> ${ha.toFixed(2)} Ha<br>
+                    <b>Acres:</b> ${acres.toFixed(2)} Ac | <b>Sq M:</b> ${areaSqM.toFixed(0)} m²<br>
+                    <span style="font-size:10px; color:#64748b;">Double-click map to finish.</span>
+                `;
+            }
+        }
+    }
+
+    function clearMeasurements() {
+        measureMode = null;
+        measurePoints = [];
+        measureLayerGroup.clearLayers();
+        map.getContainer().style.cursor = '';
+        document.getElementById('measure-val').innerText = "No active measurement.";
+        document.getElementById('btn-measure-dist').style.opacity = '1';
+        document.getElementById('btn-measure-area').style.opacity = '1';
+    }
+
+    function getPolygonAreaM2(latLngs) {
+        const radius = 6378137;
+        const len = latLngs.length;
+        if (len < 3) return 0;
+        let total = 0;
+        for (let i = 0; i < len; i++) {
+            const p1 = latLngs[i];
+            const p2 = latLngs[(i + 1) % len];
+            total += (p2.lng - p1.lng) * (Math.PI / 180) * (2 + Math.sin(p1.lat * Math.PI / 180) + Math.sin(p2.lat * Math.PI / 180));
+        }
+        return Math.abs(total * radius * radius / 2);
+    }
+
+    // 14. Verified Zonal Crop Calculation Engine (Windowed Sub-Chunk Math)
+    function initiateCalculationWorkflow() {
+        if (!activeLayerForCalc) {
+            alert("Please draw an operational area polygon first.");
+            return;
+        }
+        if (!tiffImageInstance) {
+            alert("Please open a GeoTIFF raster first.");
+            return;
+        }
+
+        const progressBox = document.getElementById('calc-progress-box');
+        const progressFill = document.getElementById('calc-progress-fill');
+        const progressText = document.getElementById('calc-progress-text');
+
+        progressBox.style.display = 'block';
+        progressFill.style.width = '0%';
+        progressText.innerText = "Extracting raster window...";
+
+        countPointsInsideActivePolygon();
+
+        setTimeout(() => {
+            runWindowedCropCalculation();
+        }, 50);
+    }
+
+    async function runWindowedCropCalculation() {
+        const progressFill = document.getElementById('calc-progress-fill');
+        const progressText = document.getElementById('calc-progress-text');
+
+        const b = activeLayerForCalc.getBounds();
+        const rx = (calcBbox[2] - calcBbox[0]) / calcWidth;
+        const ry = (calcBbox[3] - calcBbox[1]) / calcHeight;
+
+        let west = b.getWest(), east = b.getEast(), north = b.getNorth(), south = b.getSouth();
+        if (isProjected) {
+            const sw = proj4("EPSG:4326", "EPSG:32645", [west, south]);
+            const ne = proj4("EPSG:4326", "EPSG:32645", [east, north]);
+            west = sw[0]; south = sw[1];
+            east = ne[0]; north = ne[1];
+        }
+
+        let sx = Math.max(0, Math.floor((west - calcBbox[0]) / rx));
+        let ex = Math.min(calcWidth, Math.ceil((east - calcBbox[0]) / rx));
+        let sy = Math.max(0, Math.floor((calcBbox[3] - north) / ry));
+        let ey = Math.min(calcHeight, Math.ceil((calcBbox[3] - south) / ry));
+
+        if (sx >= ex || sy >= ey) {
+            alert("Selected polygon lies entirely outside the raster boundary.");
+            document.getElementById('calc-progress-box').style.display = 'none';
+            return;
+        }
+
+        const winWidth = ex - sx;
+        const winHeight = ey - sy;
+
+        const rasters = await tiffImageInstance.readRasters({
+            window: [sx, sy, ex, ey]
+        });
+        const subGrid = rasters[0];
+
+        let c0 = 0, c1 = 0, c2 = 0, c3 = 0, cOther = 0;
+        let currentY = 0;
+        const totalRows = winHeight;
+
+        function processSubChunk() {
+            let iterations = 0;
+            const maxIterationsPerFrame = 40;
+
+            while (currentY < winHeight && iterations < maxIterationsPerFrame) {
+                const rowIdx = currentY * winWidth;
+                const latOrY = calcBbox[3] - ((sy + currentY) * ry);
+
+                for (let x = 0; x < winWidth; x++) {
+                    const v = subGrid[rowIdx + x];
+                    const lngOrX = calcBbox[0] + ((sx + x) * rx);
+
+                    let ptLat = latOrY;
+                    let ptLng = lngOrX;
+
+                    if (isProjected) {
+                        const p = proj4("EPSG:32645", "EPSG:4326", [lngOrX, latOrY]);
+                        ptLng = p[0]; ptLat = p[1];
+                    }
+
+                    if (isPointInPoly(L.latLng(ptLat, ptLng), activeLayerForCalc)) {
+                        if (v === 1) c1++;
+                        else if (v === 2) c2++;
+                        else if (v === 3) c3++;
+                        else if (v === 0) c0++;
+                        else cOther++;
+                    }
+                }
+                currentY++;
+                iterations++;
+            }
+
+            const percentage = Math.min(100, Math.floor((currentY / totalRows) * 100));
+            progressFill.style.width = percentage + '%';
+            progressText.innerText = `Analyzing cells... ${percentage}%`;
+
+            if (currentY < winHeight) {
+                requestAnimationFrame(processSubChunk);
+            } else {
+                const sHa = c1 * activeMultiplier;
+                const dHa = c2 * activeMultiplier;
+                const tHa = c3 * activeMultiplier;
+                const oHa = c0 * activeMultiplier;
+                const wHa = cOther * activeMultiplier;
+                const totalCropHa = sHa + dHa + tHa;
+                const totalHa = totalCropHa + oHa + wHa;
+
+                document.getElementById('val1').innerText = sHa.toFixed(2);
+                document.getElementById('val2').innerText = dHa.toFixed(2);
+                document.getElementById('val3').innerText = tHa.toFixed(2);
+                document.getElementById('val0').innerText = oHa.toFixed(2);
+                document.getElementById('valWater').innerText = wHa.toFixed(2);
+                document.getElementById('valCropOnly').innerText = `${totalCropHa.toFixed(2)} Ha`;
+                document.getElementById('valTotal').innerText = totalHa.toFixed(2);
+                document.getElementById('valAcre').innerText = `${(totalCropHa * 2.47105).toFixed(2)} Cropped Acres`;
+
+                renderCropChart(sHa, dHa, tHa, oHa, wHa);
+
+                progressText.innerText = "Calculation Complete!";
+                setTimeout(() => {
+                    document.getElementById('calc-progress-box').style.display = 'none';
+                }, 1000);
+            }
+        }
+
+        requestAnimationFrame(processSubChunk);
+    }
+
+    // 15. Chart.js Dashboard Rendering
+    function renderCropChart(s, d, t, o, w) {
+        const ctx = document.getElementById('cropChart').getContext('2d');
+        if (cropChartInstance) cropChartInstance.destroy();
+
+        cropChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Single', 'Double', 'Triple', 'Fallow', 'Water/Other'],
+                datasets: [{
+                    data: [s, d, t, o, w],
+                    backgroundColor: ['#eab308', '#68D300', '#006400', '#94a3b8', '#38bdf8'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(c) { return `${c.parsed.y.toFixed(2)} Ha (${(c.parsed.y * 2.471).toFixed(2)} Ac)`; }
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { font: { size: 9 } } },
+                    y: { 
+                        beginAtZero: true, 
+                        title: { display: true, text: 'Ha', font: { size: 9 } },
+                        ticks: { font: { size: 8 } }
+                    }
+                }
+            }
+        });
+    }
+
+    // 16. Ray-Casting Point-in-Polygon Algorithm
+    function isPointInPoly(pt, poly) {
+        let inside = false;
+        let x = pt.lng, y = pt.lat;
+        let latlngs = poly.getLatLngs();
+        if (Array.isArray(latlngs[0][0])) latlngs = latlngs[0];
+        const vs = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
+
+        for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+            let xi = vs[i].lng, yi = vs[i].lat;
+            let xj = vs[j].lng, yj = vs[j].lat;
+            let intersect = ((yi > y) != (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    // 17. Excel (.xlsx) & CSV Export Engines
+    function exportStatsExcel() {
+        const s = parseFloat(document.getElementById('val1').innerText) || 0;
+        const d = parseFloat(document.getElementById('val2').innerText) || 0;
+        const t = parseFloat(document.getElementById('val3').innerText) || 0;
+        const f = parseFloat(document.getElementById('val0').innerText) || 0;
+        const w = parseFloat(document.getElementById('valWater').innerText) || 0;
+        const cTot = s + d + t;
+        const tot = cTot + f + w;
+
+        const data = [
+            ["Enterprise LULC Crop Area & Vector Zonal Assessment"],
+            ["Generated on", new Date().toLocaleString()],
+            ["Cell Factor Mode", document.getElementById('cell-multiplier-mode').value],
+            [],
+            ["Land Cover Category", "Class Code", "Area (Hectares)", "Area (Acres)"],
+            ["Single Crop", 1, s, s * 2.47105],
+            ["Double Crop", 2, d, d * 2.47105],
+            ["Triple Crop", 3, t, t * 2.47105],
+            ["Rangeland / Fallow / Buildup", 0, f, f * 2.47105],
+            ["Water / Plantation / Wasteland", "4-6", w, w * 2.47105],
+            [],
+            ["Total Agricultural Cropped Area", "1+2+3", cTot, cTot * 2.47105],
+            ["Total Gross Bounded Footprint", "All", tot, tot * 2.47105],
+            []
+        ];
+
+        data.push(["Vector Points Inside Bounded Polygon"]);
+        data.push(["Layer Name", "Point Count"]);
+        let totalPts = 0;
+        if (activeLayerForCalc) {
+            vectorLayers.forEach(vl => {
+                let count = 0;
+                if (vl.pointCount > 0 && map.hasLayer(vl.layer)) {
+                    vl.layer.eachLayer(l => {
+                        if (l.getLatLng && isPointInPoly(l.getLatLng(), activeLayerForCalc)) count++;
+                    });
+                }
+                data.push([vl.name, count]);
+                totalPts += count;
+            });
+        }
+        data.push(["Total Points Inside", totalPts]);
+
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, "Crop_Area_Report");
+        XLSX.writeFile(wb, `LULC_Zonal_Report_${Date.now()}.xlsx`);
+    }
+
+    function exportStatsCSV() {
+        const s = document.getElementById('val1').innerText;
+        const d = document.getElementById('val2').innerText;
+        const t = document.getElementById('val3').innerText;
+        const f = document.getElementById('val0').innerText;
+        const w = document.getElementById('valWater').innerText;
+        const cTot = document.getElementById('valCropOnly').innerText.replace(' Ha','');
+        const tot = document.getElementById('valTotal').innerText;
+
+        let csv = "Land Cover Category,Class Code,Area (Hectares),Area (Acres)\n";
+        csv += `Single Crop,1,${s},${(parseFloat(s)*2.471).toFixed(2)}\n`;
+        csv += `Double Crop,2,${d},${(parseFloat(d)*2.471).toFixed(2)}\n`;
+        csv += `Triple Crop,3,${t},${(parseFloat(t)*2.471).toFixed(2)}\n`;
+        csv += `Rangeland / Fallow,0,${f},${(parseFloat(f)*2.471).toFixed(2)}\n`;
+        csv += `Water / Plantation / Wasteland,4-6,${w},${(parseFloat(w)*2.471).toFixed(2)}\n`;
+        csv += `Total Agricultural Cropped Area,1+2+3,${cTot},${(parseFloat(cTot)*2.471).toFixed(2)}\n`;
+        csv += `Total Gross Bounded Footprint,All,${tot},${(parseFloat(tot)*2.471).toFixed(2)}\n`;
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `LULC_Crop_Report_${Date.now()}.csv`;
+        a.click();
+    }
+
+    function resetCropDisplayFields() {
+        document.getElementById('val1').innerText = "0.00";
+        document.getElementById('val2').innerText = "0.00";
+        document.getElementById('val3').innerText = "0.00";
+        document.getElementById('val0').innerText = "0.00";
+        document.getElementById('valWater').innerText = "0.00";
+        document.getElementById('valCropOnly').innerText = "0.00 Ha";
+        document.getElementById('valTotal').innerText = "0.00";
+        document.getElementById('valAcre').innerText = "0.00 Cropped Acres";
+        if (cropChartInstance) { cropChartInstance.destroy(); cropChartInstance = null; }
+    }
+
+    map.on('mousemove', (e) => {
+        document.getElementById('coord-display').innerText = `Lat: ${e.latlng.lat.toFixed(5)} | Lon: ${e.latlng.lng.toFixed(5)}`;
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Mouza LULC & Cropping Intensity Web GIS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    #map {
+      height: 100vh;
+      width: 100vw;
+    }
+
+    .dashboard-panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.96);
+      padding: 14px;
+      border-radius: 8px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+      width: 360px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      font-size: 13px;
+    }
+
+    .dashboard-panel h3 {
+      margin: 0 0 10px 0;
+      font-size: 15px;
+      color: #1a202c;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 6px;
+    }
+
+    .form-group {
+      margin-bottom: 10px;
+      position: relative;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #334155;
+    }
+
+    .form-group input[type="file"],
+    .form-group input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 12px;
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+    }
+
+    /* Autocomplete Dropdown */
+    .autocomplete-items {
+      position: absolute;
+      border: 1px solid #cbd5e1;
+      border-top: none;
+      z-index: 1050;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-height: 180px;
+      overflow-y: auto;
+      background-color: #fff;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      border-radius: 0 0 4px 4px;
+    }
+
+    .autocomplete-item {
+      padding: 7px 10px;
+      cursor: pointer;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+
+    .autocomplete-item:hover, .autocomplete-active {
+      background-color: #e0f2fe;
+      color: #0369a1;
+    }
+
+    .btn {
+      display: inline-block;
+      width: 100%;
+      padding: 7px 10px;
+      margin-top: 6px;
+      background: #0284c7;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      text-align: center;
+      font-size: 12px;
+    }
+
+    .btn:hover { background: #0369a1; }
+    .btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    .btn-secondary { background: #475569; }
+    .btn-secondary:hover { background: #334155; }
+    .btn-export { background: #16a34a; }
+    .btn-export:hover { background: #15803d; }
+
+    .stats-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 11px;
+    }
+
+    .stats-table th, .stats-table td {
+      border: 1px solid #cbd5e1;
+      padding: 4px 6px;
+      text-align: left;
+    }
+
+    .stats-table th {
+      background: #f1f5f9;
+      font-weight: 600;
+    }
+
+    .color-pill {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 5px;
+      vertical-align: middle;
+      border: 1px solid #64748b;
+    }
+
+    .legend-panel {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.94);
+      padding: 10px 14px;
+      border-radius: 6px;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+      font-size: 11px;
+      line-height: 1.6;
+      max-height: 350px;
+      overflow-y: auto;
+    }
+
+    .legend-panel h4 {
+      margin: 0 0 6px 0;
+      font-size: 12px;
+    }
+
+    .status-msg {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    /* Modal for Customizing Classification */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.6);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-card {
+      background: white;
+      padding: 18px;
+      border-radius: 8px;
+      max-width: 480px;
+      width: 90%;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+
+    .class-editor-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .class-editor-row input[type="number"] { width: 55px; padding: 4px; }
+    .class-editor-row input[type="text"] { flex: 1; padding: 4px; }
+    .class-editor-row input[type="color"] { width: 32px; height: 28px; border: none; padding: 0; cursor: pointer; }
+    .btn-delete {
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+  </style>
+
+  <!-- Dependencies -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/georaster"></script>
+  <script src="https://unpkg.com/georaster-layer-for-leaflet"></script>
+  <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+</head>
+<body>
+
+  <div id="map"></div>
+
+  <!-- Dashboard Panel -->
+  <div class="dashboard-panel">
+    <h3>Mouza LULC Analyzer by Dayamoy Ghosh, EE</h3>
+
+    <div class="form-group">
+      <label>1. Upload Mouza GeoJSON:</label>
+      <input type="file" id="geojsonInput" accept=".geojson,application/geo+json,application/json" />
+    </div>
+
+    <!-- Search Mouza with Multi-Attribute Search -->
+    <div class="form-group">
+      <label>Search Mouza (Name / Block / District / JL):</label>
+      <input type="text" id="mouzaSearchInput" placeholder="Type Mouza, Block, or District..." autocomplete="off" disabled />
+      <div id="autocompleteList" class="autocomplete-items" style="display: none;"></div>
+    </div>
+
+    <div class="form-group">
+      <label>2. Upload LULC GeoTIFF (.tif / .tiff):</label>
+      <input type="file" id="geotiffInput" accept=".tif,.tiff" />
+    </div>
+
+    <button id="openClassModalBtn" class="btn btn-secondary">Configure Classification & Colors</button>
+
+    <div class="status-msg" id="statusLabel">Please upload boundary & raster layers to begin.</div>
+
+    <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 10px 0;" />
+
+    <div id="selectionSummary">
+      <strong>Selected Mouza:</strong> <span id="mouzaNameDisplay">None</span><br />
+      <strong>Block:</strong> <span id="blockNameDisplay">-</span><br />
+      <strong>District:</strong> <span id="distDisplay">-</span><br />
+      <strong>JL No:</strong> <span id="jlDisplay">-</span><br />
+      <strong>Official Area (MA):</strong> <span id="maDisplay">-</span><br />
+      <strong>Detected Resolution:</strong> <span id="resDisplay">-</span>
+    </div>
+
+    <div id="resultsContainer" style="display: none;">
+      <table class="stats-table" id="statsTable">
+        <thead>
+          <tr>
+            <th>Class</th>
+            <th>Area (Ha)</th>
+            <th>%</th>
+          </tr>
+        </thead>
+        <tbody id="statsTableBody"></tbody>
+      </table>
+
+      <button id="exportBtn" class="btn btn-export">Export Results to CSV</button>
+    </div>
+  </div>
+
+  <!-- Map Legend -->
+  <div class="legend-panel">
+    <h4>Classification Scheme</h4>
+    <div id="legendItemsContainer"></div>
+  </div>
+
+  <!-- Classification Customizer Modal -->
+  <div id="classModal" class="modal-overlay">
+    <div class="modal-card">
+      <h3 style="margin-top:0;">Class Settings & Colors</h3>
+      <p style="font-size:11px; color:#64748b; margin-bottom:12px;">Customize values, labels, and color codes for your raster.</p>
+      
+      <div id="classEditorList"></div>
+      
+      <button id="addClassBtn" class="btn btn-secondary" style="margin-top: 6px;">+ Add Class</button>
+      
+      <div style="display: flex; gap: 8px; margin-top: 14px;">
+        <button id="saveClassesBtn" class="btn" style="flex:1;">Apply & Update Map</button>
+        <button id="closeModalBtn" class="btn btn-secondary" style="flex:1;">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. MAP INITIALIZATION & GOOGLE BASEMAPS
+    // =========================================================================
+    var map = L.map('map', {
+      center: [23.23, 87.07],
+      zoom: 10
+    });
+
+    var googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
+      subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+      attribution: '&copy; Google'
+    }).addTo(map);
+
+    var googleStreets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
+      subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+      attribution: '&copy; Google'
+    });
+
+    var baseMaps = {
+      "Google Hybrid": googleHybrid,
+      "Google Streets": googleStreets
+    };
+
+    var overlayLayers = {};
+    var layerControl = L.control.layers(baseMaps, overlayLayers, { position: 'topright' }).addTo(map);
+
+    // =========================================================================
+    // 2. CLASSIFICATION STATE & CONFIGURATION (DEFAULT SCHEME 0 - 7)
+    // =========================================================================
+    var classMetadata = {
+      0: { name: 'Rangeland', color: '#e5d8bd' },
+      1: { name: 'Kharif Only', color: '#fdbf6f' },
+      2: { name: 'Kharif, Rabi', color: '#b2df8a' },
+      3: { name: 'Kharif, Rabi, Zaid', color: '#7b1fa2' },
+      4: { name: 'Water', color: '#1f78b4' },
+      5: { name: 'Plantations', color: '#33a02c' },
+      6: { name: 'Rabi Only', color: '#ff7f00' },
+      7: { name: 'Rabi Zaid', color: '#17becf' }
+    };
+
+    function renderLegend() {
+      var container = document.getElementById('legendItemsContainer');
+      container.innerHTML = '';
+      var keys = Object.keys(classMetadata).sort(function(a, b) { return Number(a) - Number(b); });
+      keys.forEach(function(code) {
+        var item = classMetadata[code];
+        var div = document.createElement('div');
+        div.innerHTML = '<span class="color-pill" style="background: ' + item.color + ';"></span> ' + code + ': ' + item.name;
+        container.appendChild(div);
+      });
+    }
+    renderLegend();
+
+    // =========================================================================
+    // 3. UI SEARCH & AUTOCOMPLETE LOGIC
+    // =========================================================================
+    var geojsonLayer = null;
+    var rasterLayer = null;
+    var parsedGeoRaster = null;
+    var highlightLayer = null;
+    var latestStats = null;
+    var allMouzaFeatures = [];
+
+    var searchInput = document.getElementById('mouzaSearchInput');
+    var autocompleteBox = document.getElementById('autocompleteList');
+    var statusLabel = document.getElementById('statusLabel');
+
+    function getFeatureAttribute(props, candidates) {
+      for (var i = 0; i < candidates.length; i++) {
+        var key = candidates[i];
+        if (props[key] !== undefined && props[key] !== null && props[key] !== '') {
+          return String(props[key]).trim();
+        }
+      }
+      return '';
+    }
+
+    function extractMouzaDetails(feature) {
+      var p = feature.properties || {};
+      var mName = getFeatureAttribute(p, ['MOUZA', 'mouza', 'MOUZA_NAME', 'mouza_name', 'NAME', 'name']) || 'Unnamed Mouza';
+      var bName = getFeatureAttribute(p, ['BLOCK', 'block', 'BLOCK_NAME', 'block_name']) || 'Unknown Block';
+      var dName = getFeatureAttribute(p, ['DISTRICT', 'district', 'DIST', 'dist']) || 'Unknown District';
+      var jlNo = getFeatureAttribute(p, ['JL_NO', 'jl_no', 'JL', 'jl', 'JLNO', 'jlno']) || '-';
+      var ma = getFeatureAttribute(p, ['MA', 'ma', 'AREA', 'area', 'AREA_HA', 'area_ha']) || '-';
+      return { mName: mName, bName: bName, dName: dName, jlNo: jlNo, ma: ma };
+    }
+
+    searchInput.addEventListener('input', function() {
+      var query = this.value.trim().toLowerCase();
+      autocompleteBox.innerHTML = '';
+      if (!query || allMouzaFeatures.length === 0) {
+        autocompleteBox.style.display = 'none';
+        return;
+      }
+
+      var matches = allMouzaFeatures.filter(function(item) {
+        var info = item.info;
+        var searchTarget = (info.mName + " " + info.bName + " " + info.dName + " " + info.jlNo).toLowerCase();
+        return searchTarget.indexOf(query) !== -1;
+      }).slice(0, 20);
+
+      if (matches.length === 0) {
+        autocompleteBox.style.display = 'none';
+        return;
+      }
+
+      matches.forEach(function(item) {
+        var d = document.createElement('div');
+        d.className = 'autocomplete-item';
+        d.innerHTML = '<strong>' + item.info.mName + '</strong> (JL: ' + item.info.jlNo + ')<br/>' +
+                      '<span style="color: #64748b;">Block: ' + item.info.bName + ' | Dist: ' + item.info.dName + '</span>';
+        d.addEventListener('click', function() {
+          searchInput.value = item.info.mName + ' (' + item.info.bName + ')';
+          autocompleteBox.style.display = 'none';
+          map.fitBounds(item.layer.getBounds(), { maxZoom: 16 });
+          handleMouzaSelection(item.feature, item.layer);
+        });
+        autocompleteBox.appendChild(d);
+      });
+      autocompleteBox.style.display = 'block';
+    });
+
+    document.addEventListener('click', function(e) {
+      if (e.target !== searchInput) {
+        autocompleteBox.style.display = 'none';
+      }
+    });
+
+    // =========================================================================
+    // 4. GEOJSON INGESTION
+    // =========================================================================
+    document.getElementById('geojsonInput').addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+
+      var reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          var data = JSON.parse(evt.target.result);
+
+          if (geojsonLayer) {
+            map.removeLayer(geojsonLayer);
+            layerControl.removeLayer(geojsonLayer);
+          }
+          allMouzaFeatures = [];
+
+          geojsonLayer = L.geoJSON(data, {
+            style: {
+              color: '#d97706',
+              weight: 1.5,
+              fillOpacity: 0.05
+            },
+            onEachFeature: function(feature, layer) {
+              var info = extractMouzaDetails(feature);
+              allMouzaFeatures.push({ feature: feature, layer: layer, info: info });
+
+              layer.on('click', function(ev) {
+                L.DomEvent.stopPropagation(ev);
+                handleMouzaSelection(feature, layer);
+              });
+
+              layer.bindTooltip(info.mName + ' (' + info.bName + ')', { sticky: true });
+            }
+          }).addTo(map);
+
+          map.fitBounds(geojsonLayer.getBounds());
+          layerControl.addOverlay(geojsonLayer, "Mouza Boundaries");
+          searchInput.disabled = false;
+          statusLabel.innerText = "Loaded " + allMouzaFeatures.length + " mouzas. Ready for search or raster upload.";
+        } catch (err) {
+          alert("Error parsing GeoJSON: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // =========================================================================
+    // 5. GEOTIFF RASTER INGESTION WITH AUTO-DETECTION (METRIC RESOLUTION)
+    // =========================================================================
+    function createRasterLayer() {
+      if (rasterLayer) {
+        map.removeLayer(rasterLayer);
+        layerControl.removeLayer(rasterLayer);
+      }
+
+      rasterLayer = new GeoRasterLayer({
+        georaster: parsedGeoRaster,
+        opacity: 0.85,
+        pixelValuesToColorFn: function(values) {
+          if (values[0] === undefined || values[0] === null || isNaN(values[0])) return null;
+          var val = Math.round(values[0]);
+          if (!classMetadata[val]) return null;
+          return classMetadata[val].color;
+        },
+        resolution: 256
+      });
+
+      rasterLayer.addTo(map);
+      layerControl.addOverlay(rasterLayer, "LULC Raster");
+    }
+
+    document.getElementById('geotiffInput').addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      if (!file) return;
+
+      statusLabel.innerText = "Reading GeoTIFF structure & spatial reference...";
+
+      var reader = new FileReader();
+      reader.onload = function(evt) {
+        parseGeoraster(evt.target.result).then(function(georaster) {
+          parsedGeoRaster = georaster;
+          createRasterLayer();
+
+          var xResMeters, yResMeters;
+
+          if (georaster.pixelWidth < 0.1) {
+            var centerLat = (georaster.ymin + georaster.ymax) / 2;
+            var metersPerDegLat = 111320;
+            var metersPerDegLon = 111320 * Math.cos(centerLat * Math.PI / 180);
+
+            xResMeters = georaster.pixelWidth * metersPerDegLon;
+            yResMeters = georaster.pixelHeight * metersPerDegLat;
+          } else {
+            xResMeters = georaster.pixelWidth;
+            yResMeters = georaster.pixelHeight;
+          }
+
+          document.getElementById('resDisplay').innerText = 
+            xResMeters.toFixed(2) + " m × " + yResMeters.toFixed(2) + " m";
+
+          statusLabel.innerText = "GeoTIFF ready (" + xResMeters.toFixed(2) + " m resolution). Click or search any Mouza to calculate area.";
+        }).catch(function(err) {
+          alert("Error parsing GeoTIFF: " + err.message);
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    // =========================================================================
+    // 6. RESOLUTION AUTO-CALCULATION & PIXEL EXTRACTION
+    // =========================================================================
+    function handleMouzaSelection(feature, layer) {
+      if (highlightLayer) {
+        map.removeLayer(highlightLayer);
+      }
+      highlightLayer = L.geoJSON(feature, {
+        style: {
+          color: '#ef4444',
+          weight: 3,
+          fillOpacity: 0.15
+        }
+      }).addTo(map);
+
+      var details = extractMouzaDetails(feature);
+      document.getElementById('mouzaNameDisplay').innerText = details.mName;
+      document.getElementById('blockNameDisplay').innerText = details.bName;
+      document.getElementById('distDisplay').innerText = details.dName;
+      document.getElementById('jlDisplay').innerText = details.jlNo;
+      document.getElementById('maDisplay').innerText = details.ma !== '-' ? details.ma + ' Ha' : 'N/A';
+
+      if (!parsedGeoRaster) {
+        statusLabel.innerText = "GeoTIFF not uploaded yet. Showing mouza boundaries only.";
+        return;
+      }
+
+      statusLabel.innerText = "Calculating class distribution for " + details.mName + "...";
+      setTimeout(function() {
+        computeZonalAreas(feature, details);
+      }, 50);
+    }
+
+    function computeZonalAreas(feature, details) {
+      var r = parsedGeoRaster;
+      var bbox = turf.bbox(feature);
+
+      var xMinIdx = Math.max(0, Math.floor((bbox[0] - r.xmin) / r.pixelWidth));
+      var xMaxIdx = Math.min(r.width - 1, Math.ceil((bbox[2] - r.xmin) / r.pixelWidth));
+      var yMinIdx = Math.max(0, Math.floor((r.ymax - bbox[3]) / r.pixelHeight));
+      var yMaxIdx = Math.min(r.height - 1, Math.ceil((r.ymax - bbox[1]) / r.pixelHeight));
+
+      var polyCentroid = turf.centroid(feature);
+      var latMid = polyCentroid.geometry.coordinates[1];
+
+      var pixelAreaM2;
+      if (r.pixelWidth < 0.1) {
+        var metersPerDegLat = 111320;
+        var metersPerDegLon = 111320 * Math.cos(latMid * Math.PI / 180);
+        var dxM = r.pixelWidth * metersPerDegLon;
+        var dyM = r.pixelHeight * metersPerDegLat;
+        pixelAreaM2 = Math.abs(dxM * dyM);
+      } else {
+        pixelAreaM2 = Math.abs(r.pixelWidth * r.pixelHeight);
+      }
+      var pixelAreaHa = pixelAreaM2 / 10000;
+
+      var pixelCounts = {};
+      Object.keys(classMetadata).forEach(function(code) {
+        pixelCounts[code] = 0;
+      });
+
+      var totalRasterPixels = 0;
+      var bandData = r.values[0];
+
+      for (var y = yMinIdx; y <= yMaxIdx; y++) {
+        var pixelLat = r.ymax - (y + 0.5) * r.pixelHeight;
+        for (var x = xMinIdx; x <= xMaxIdx; x++) {
+          var valRaw = bandData[y][x];
+          if (valRaw === undefined || valRaw === null || isNaN(valRaw)) continue;
+
+          var pixelVal = Math.round(valRaw);
+
+          if (classMetadata[pixelVal] !== undefined) {
+            var pixelLon = r.xmin + (x + 0.5) * r.pixelWidth;
+            var pt = turf.point([pixelLon, pixelLat]);
+
+            if (turf.booleanPointInPolygon(pt, feature)) {
+              pixelCounts[pixelVal]++;
+              totalRasterPixels++;
+            }
+          }
+        }
+      }
+
+      var computedTotalHa = totalRasterPixels * pixelAreaHa;
+
+      var tbody = document.getElementById('statsTableBody');
+      tbody.innerHTML = '';
+      var csvRows = [];
+
+      var sortedCodes = Object.keys(classMetadata).sort(function(a, b) { return Number(a) - Number(b); });
+
+      sortedCodes.forEach(function(code) {
+        var ha = (pixelCounts[code] || 0) * pixelAreaHa;
+        var pct = computedTotalHa > 0 ? ((ha / computedTotalHa) * 100).toFixed(2) : '0.00';
+        var cMeta = classMetadata[code];
+
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td><span class="color-pill" style="background:' + cMeta.color + '"></span>' + cMeta.name + '</td>' +
+                       '<td>' + ha.toFixed(2) + '</td>' +
+                       '<td>' + pct + '%</td>';
+        tbody.appendChild(tr);
+
+        csvRows.push({
+          DISTRICT: details.dName,
+          BLOCK: details.bName,
+          MOUZA: details.mName,
+          JL_NO: details.jlNo,
+          OFFICIAL_MA_HA: details.ma,
+          CLASS_CODE: code,
+          LAND_USE_CLASS: cMeta.name,
+          AREA_HA: ha.toFixed(2),
+          PERCENTAGE: pct
+        });
+      });
+
+      var totalTr = document.createElement('tr');
+      totalTr.style.fontWeight = 'bold';
+      totalTr.style.background = '#f8fafc';
+      totalTr.innerHTML = '<td>Total Calculated</td><td>' + computedTotalHa.toFixed(2) + '</td><td>100%</td>';
+      tbody.appendChild(totalTr);
+
+      csvRows.push({
+        DISTRICT: details.dName,
+        BLOCK: details.bName,
+        MOUZA: details.mName,
+        JL_NO: details.jlNo,
+        OFFICIAL_MA_HA: details.ma,
+        CLASS_CODE: 'TOTAL',
+        LAND_USE_CLASS: 'Total Computed Area',
+        AREA_HA: computedTotalHa.toFixed(2),
+        PERCENTAGE: '100.00'
+      });
+
+      latestStats = {
+        mouzaName: details.mName,
+        blockName: details.bName,
+        data: csvRows
+      };
+
+      document.getElementById('resultsContainer').style.display = 'block';
+      statusLabel.innerText = "Area calculation finished for " + details.mName + ".";
+    }
+
+    // =========================================================================
+    // 7. CSV EXPORT
+    // =========================================================================
+    document.getElementById('exportBtn').addEventListener('click', function() {
+      if (!latestStats || !latestStats.data || latestStats.data.length === 0) {
+        alert("No computed statistics available.");
+        return;
+      }
+
+      var headers = ["DISTRICT", "BLOCK", "MOUZA", "JL_NO", "OFFICIAL_MA_HA", "CLASS_CODE", "LAND_USE_CLASS", "AREA_HA", "PERCENTAGE"];
+      var csvContent = headers.join(",") + "\n";
+
+      latestStats.data.forEach(function(row) {
+        var rowArr = [
+          '"' + row.DISTRICT + '"',
+          '"' + row.BLOCK + '"',
+          '"' + row.MOUZA + '"',
+          '"' + row.JL_NO + '"',
+          '"' + row.OFFICIAL_MA_HA + '"',
+          '"' + row.CLASS_CODE + '"',
+          '"' + row.LAND_USE_CLASS + '"',
+          row.AREA_HA,
+          row.PERCENTAGE
+        ];
+        csvContent += rowArr.join(",") + "\n";
+      });
+
+      var blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement("a");
+      var safeName = (latestStats.blockName + "_" + latestStats.mouzaName).replace(/[^a-zA-Z0-9_]/g, "_");
+
+      link.setAttribute("href", url);
+      link.setAttribute("download", "LULC_Stats_" + safeName + ".csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+
+    // =========================================================================
+    // 8. ON-SCREEN CLASSIFICATION EDITOR
+    // =========================================================================
+    var classModal = document.getElementById('classModal');
+    var classEditorList = document.getElementById('classEditorList');
+
+    function populateClassEditor() {
+      classEditorList.innerHTML = '';
+      var keys = Object.keys(classMetadata).sort(function(a, b) { return Number(a) - Number(b); });
+      keys.forEach(function(code) {
+        createClassEditorRow(code, classMetadata[code].name, classMetadata[code].color);
+      });
+    }
+
+    function createClassEditorRow(code, name, color) {
+      var row = document.createElement('div');
+      row.className = 'class-editor-row';
+      row.innerHTML = '<input type="number" class="edit-code" value="' + code + '" placeholder="Val" />' +
+                      '<input type="text" class="edit-name" value="' + name + '" placeholder="Class Name" />' +
+                      '<input type="color" class="edit-color" value="' + color + '" />' +
+                      '<button class="btn-delete" title="Delete">✕</button>';
+
+      row.querySelector('.btn-delete').addEventListener('click', function() {
+        row.remove();
+      });
+      classEditorList.appendChild(row);
+    }
+
+    document.getElementById('openClassModalBtn').addEventListener('click', function() {
+      populateClassEditor();
+      classModal.style.display = 'flex';
+    });
+
+    document.getElementById('closeModalBtn').addEventListener('click', function() {
+      classModal.style.display = 'none';
+    });
+
+    document.getElementById('addClassBtn').addEventListener('click', function() {
+      var rows = classEditorList.querySelectorAll('.edit-code');
+      var maxVal = -1;
+      rows.forEach(function(inp) {
+        var v = parseInt(inp.value, 10);
+        if (!isNaN(v) && v > maxVal) maxVal = v;
+      });
+      createClassEditorRow(maxVal + 1, 'New Class', '#3b82f6');
+    });
+
+    document.getElementById('saveClassesBtn').addEventListener('click', function() {
+      var rows = classEditorList.querySelectorAll('.class-editor-row');
+      var newMeta = {};
+
+      rows.forEach(function(r) {
+        var code = parseInt(r.querySelector('.edit-code').value, 10);
+        var name = r.querySelector('.edit-name').value.trim();
+        var color = r.querySelector('.edit-color').value;
+
+        if (!isNaN(code) && name) {
+          newMeta[code] = { name: name, color: color };
+        }
+      });
+
+      if (Object.keys(newMeta).length === 0) {
+        alert("Please define at least one valid class.");
+        return;
+      }
+
+      classMetadata = newMeta;
+      renderLegend();
+      classModal.style.display = 'none';
+
+      if (parsedGeoRaster) {
+        createRasterLayer();
+      }
+
+      if (highlightLayer && highlightLayer.getLayers().length > 0) {
+        var activeFeature = highlightLayer.getLayers()[0].feature;
+        handleMouzaSelection(activeFeature, highlightLayer.getLayers()[0]);
+      }
+    });
+  </script>
+</body>
+</html>

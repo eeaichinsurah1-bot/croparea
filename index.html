@@ -565,45 +565,75 @@
     /* =====================================================================
        AUTO-LOAD FROM HOSTED REPOSITORY (GITHUB PAGES / LOCAL XAMPP)
        ===================================================================== */
-    async function autoLoadFromRepository() {
-      showToast("Loading data.xlsx from repository...");
-      try {
-        const fileUrl = new URL("data.xlsx", window.location.href).href;
-        const response = await fetch(`${fileUrl}?v=${Date.now()}`);
+   /* =====================================================================
+   TARGETED AUTO-LOAD FOR eeaichinsurah1-bot/croparea
+   ===================================================================== */
+async function autoLoadFromRepository() {
+  const statusEl = document.getElementById('recordCountText');
+  statusEl.innerHTML = `⏳ <span style="color:var(--primary);">Auto-loading data.xlsx...</span>`;
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
+  // Candidate URLs in priority order
+  const targetUrls = [
+    // 1. Direct GitHub Pages path with explicit repository subdirectory
+    "https://eeaichinsurah1-bot.github.io/croparea/data.xlsx",
+    
+    // 2. Direct Raw GitHub CDN (bypasses GitHub Pages build delay completely)
+    "https://raw.githubusercontent.com/eeaichinsurah1-bot/croparea/main/data.xlsx",
 
-        const contentType = response.headers.get("content-type") || "";
-        if (contentType.includes("text/html")) {
-          throw new Error("GitHub served an HTML page instead of binary Excel.");
-        }
+    // 3. Fallback relative path for local XAMPP / localhost
+    "./data.xlsx"
+  ];
 
-        const buffer = await response.arrayBuffer();
-        if (buffer.byteLength < 1000) {
-          throw new Error("File too small or Git LFS pointer.");
-        }
+  let lastError = null;
 
-        const data = new Uint8Array(buffer);
-        const workbook = XLSX.read(data, { type: 'array' });
+  for (const url of targetUrls) {
+    try {
+      console.log("Fetching Excel data from:", url);
+      // Append timestamp to bust stale browser cache
+      const response = await fetch(`${url}?v=${Date.now()}`);
 
-        // Guard against corrupted workbook where SheetJS falls back to an empty 'Sheet1'
-        if (workbook.SheetNames.length === 1 && workbook.SheetNames[0] === 'Sheet1') {
-          const testData = XLSX.utils.sheet_to_json(workbook.Sheets['Sheet1']);
-          if (testData.length === 0) {
-            throw new Error("Workbook parsed as empty Sheet1.");
-          }
-        }
-
-        processExcelWorkbook(workbook, "repository");
-      } catch (err) {
-        console.warn("Auto-load notice:", err.message);
-        document.getElementById('recordCountText').innerText = "Click 'Upload Sheet (.xlsx)' to select your file.";
-        showToast("Auto-load standby: Please click 'Upload Sheet (.xlsx)' to select data file.");
+      if (!response.ok) {
+        lastError = `HTTP ${response.status} from ${url}`;
+        continue;
       }
-    }
 
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("text/html")) {
+        lastError = `Received HTML page instead of binary spreadsheet from ${url}`;
+        continue;
+      }
+
+      const buffer = await response.arrayBuffer();
+      if (buffer.byteLength < 1000) {
+        lastError = `File size too small (${buffer.byteLength} bytes) at ${url}`;
+        continue;
+      }
+
+      const data = new Uint8Array(buffer);
+      const workbook = XLSX.read(data, { type: 'array' });
+
+      // Ensure valid sheets are present
+      if (workbook.SheetNames.length === 1 && workbook.SheetNames[0] === 'Sheet1') {
+        const testRows = XLSX.utils.sheet_to_json(workbook.Sheets['Sheet1']);
+        if (testRows.length === 0) {
+          lastError = "Parsed default empty Sheet1.";
+          continue;
+        }
+      }
+
+      // Success
+      processExcelWorkbook(workbook, "GitHub repository (auto-loaded)");
+      return;
+    } catch (err) {
+      lastError = err.message;
+    }
+  }
+
+  // If all fetch attempts fail, display clear diagnostic info on screen
+  console.warn("Auto-load failed:", lastError);
+  statusEl.innerHTML = `⚠️ <span style="color:var(--danger); font-weight:600;">Auto-load notice: ${lastError}</span> | <span style="color:var(--text-muted);">Please use the "📂 Upload Sheet (.xlsx)" button.</span>`;
+  showToast("Auto-load standby. Please select your file using the upload button.");
+}
     /* =====================================================================
        MANUAL UPLOAD LISTENER
        ===================================================================== */

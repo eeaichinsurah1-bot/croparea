@@ -165,7 +165,7 @@
     /* Financial & Execution KPI Grid */
     .kpi-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
       gap: 12px;
       margin-bottom: 20px;
     }
@@ -173,7 +173,7 @@
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 14px;
+      padding: 13px 14px;
       border-left: 4px solid var(--secondary);
     }
     .kpi-card.success { border-left-color: var(--success); }
@@ -183,8 +183,9 @@
     .kpi-card.info { border-left-color: #8b5cf6; }
     .kpi-card.finance { border-left-color: #0d9488; }
     .kpi-card.contract { border-left-color: #0284c7; }
-    .kpi-title { font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--text-muted); margin: 0; }
-    .kpi-val { font-size: 21px; font-weight: 700; margin-top: 6px; }
+    .kpi-card.balance { border-left-color: #ea580c; }
+    .kpi-title { font-size: 10.5px; text-transform: uppercase; font-weight: 700; color: var(--text-muted); margin: 0; line-height: 1.3; }
+    .kpi-val { font-size: 19px; font-weight: 700; margin-top: 5px; }
 
     .map-wrapper {
       position: relative;
@@ -437,7 +438,7 @@
       </div>
     </div>
 
-    <!-- Executive KPI Row: Reconciled Totals + AA Amount, Contract Amount & Expenditure -->
+    <!-- Executive KPI Row: Reconciled Quantities + Complete Financial Audit -->
     <div class="kpi-row">
       <div class="kpi-card">
         <div class="kpi-title">Total Tracked (AA > 0)</div>
@@ -471,9 +472,17 @@
         <div class="kpi-title">Total Contract Amount</div>
         <div class="kpi-val" id="kpiTotalContract" style="color: #0284c7;">₹0.0 Cr</div>
       </div>
+      <div class="kpi-card danger">
+        <div class="kpi-title">Dropped / Dispute Contract</div>
+        <div class="kpi-val" id="kpiDroppedContract" style="color: #dc2626;">₹0.0 Cr</div>
+      </div>
       <div class="kpi-card">
         <div class="kpi-title">Total Expenditure</div>
         <div class="kpi-val" id="kpiExp">₹0.0 Cr</div>
+      </div>
+      <div class="kpi-card balance">
+        <div class="kpi-title">Net Balance Amount</div>
+        <div class="kpi-val" id="kpiBalanceContract" style="color: #ea580c;">₹0.0 Cr</div>
       </div>
     </div>
 
@@ -854,11 +863,13 @@
       let pendingHO = 0;
       let totalAA = 0;
       let totalContract = 0;
+      let droppedContract = 0;
       let totalExp = 0;
 
       data.forEach(r => {
         if (r._isDroppedOrDispute) {
           droppedOrDispute++;
+          droppedContract += r._contractAmount;
         } else if (r._is100) {
           completed100++;
           if (r._hasHo) handedOver++;
@@ -872,6 +883,9 @@
         totalExp += r._totalExp;
       });
 
+      // Net Balance = Total Contract - Dropped Contract - Incurred Expenditure
+      let balanceContract = totalContract - droppedContract - totalExp;
+
       document.getElementById('kpiTotal').innerText = data.length.toLocaleString();
       document.getElementById('kpiCompleted').innerText = completed100.toLocaleString();
       document.getElementById('kpiOngoing').innerText = ongoing.toLocaleString();
@@ -879,10 +893,12 @@
       document.getElementById('kpiHandover').innerText = handedOver.toLocaleString();
       document.getElementById('kpiPendingHO').innerText = pendingHO.toLocaleString();
       
-      // Three core financial metrics
+      // Complete Financial Metrics
       document.getElementById('kpiTotalAA').innerText = '₹' + (totalAA / 1e7).toFixed(2) + ' Cr';
       document.getElementById('kpiTotalContract').innerText = '₹' + (totalContract / 1e7).toFixed(2) + ' Cr';
+      document.getElementById('kpiDroppedContract').innerText = '₹' + (droppedContract / 1e7).toFixed(2) + ' Cr';
       document.getElementById('kpiExp').innerText = '₹' + (totalExp / 1e7).toFixed(2) + ' Cr';
+      document.getElementById('kpiBalanceContract').innerText = '₹' + (balanceContract / 1e7).toFixed(2) + ' Cr';
     }
 
     /* =====================================================================
@@ -1023,7 +1039,6 @@
 
       googleHybrid.addTo(mapInstance);
 
-      // Clean Layer Control without any API Key Dependencies
       const baseLayers = {
         "Google Satellite Hybrid": googleHybrid,
         "Google Streets": googleStreet,
@@ -1038,7 +1053,7 @@
       });
       mapInstance.addLayer(markerClusterGroup);
 
-      // Right-Click Context: Direct Street View Launcher (Open in Google Maps)
+      // Right-Click Context: Street View Launcher (no API key required)
       mapInstance.on('contextmenu', function(e) {
         let lat = e.latlng.lat.toFixed(6);
         let lng = e.latlng.lng.toFixed(6);

@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WBADMIP Phase II - District & Year-Wise Expenditure Statement</title>
+
+  <!-- SheetJS for Excel Reading and Export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- Chart.js & Datalabels Plugin for Graphical View -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --secondary: #0284c7;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --success: #10b981;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .brand-title {
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--primary);
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .uploader-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .btn-sync {
+      background: #f1f5f9;
+      color: var(--primary);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-sync:hover {
+      background: #e2e8f0;
+    }
+    .file-input-btn {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+      background: var(--primary);
+      color: #fff;
+      padding: 9px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .file-input-btn:hover { background: #172554; }
+    .file-input-btn input[type=file] {
+      position: absolute;
+      left: 0;
+      top: 0;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+
+    .container {
+      padding: 24px;
+      max-width: 1500px;
+      margin: 0 auto;
+    }
+
+    /* Financial Summary KPI Cards */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      border-left: 4px solid var(--secondary);
+    }
+    .kpi-card.grand { border-left-color: #0d9488; background: #f0fdfa; }
+    .kpi-title { font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--text-muted); margin: 0; }
+    .kpi-val { font-size: 20px; font-weight: 700; color: var(--primary); margin-top: 5px; }
+    .kpi-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    /* Content Cards */
+    .card-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
+    .card-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .btn-export {
+      background: var(--success);
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+    .btn-export:hover { background: #059669; }
+
+    /* Table Styles */
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .summary-table th {
+      background: #0284c7;
+      color: #ffffff;
+      padding: 11px 12px;
+      border: 1px solid #0369a1;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .summary-table td {
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+    }
+    .summary-table tbody tr:nth-child(even) { background-color: #f8fafc; }
+    .summary-table tbody tr:hover { background-color: #f1f5f9; }
+
+    .summary-table tfoot tr {
+      background: #e0f2fe;
+      border-top: 2px solid #0284c7;
+      font-weight: 800;
+    }
+    .summary-table tfoot td {
+      padding: 11px 12px;
+      border: 1px solid #bae6fd;
+      color: #1e3a8a;
+    }
+
+    /* Charts Grid */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+      gap: 20px;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      color: #fff;
+      padding: 10px 22px;
+      border-radius: 30px;
+      font-size: 13px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 2000;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header>
+    <div>
+      <h1 class="brand-title">
+        <span>💰 WBADMIP Phase-II</span>
+        <span style="font-weight: 400; font-size: 15px; color: #64748b;">| District & Year-Wise Expenditure Statement</span>
+      </h1>
+      <div class="brand-sub">Water Resources Investigation & Development Department, Govt. of West Bengal</div>
+    </div>
+    <div class="uploader-actions">
+      <span id="loadStatusText" style="font-size: 13px; font-weight: 600; color: var(--text-muted);">
+        Connecting to Google Sheets...
+      </span>
+      <button class="btn-sync" onclick="loadFromGoogleSheets()">
+        🔄 Refresh Live Data
+      </button>
+      <div class="file-input-btn">
+        <span>📂 Upload Offline (.xlsx)</span>
+        <input type="file" id="excelFileInput" accept=".xlsx, .xls" />
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- KPI Summary Row -->
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-title">FY 2023-24 Exp</div>
+        <div class="kpi-val" id="kpi2324">₹0.00 Cr</div>
+        <div class="kpi-sub" id="sub2324">₹ 0.00</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">FY 2024-25 Exp</div>
+        <div class="kpi-val" id="kpi2425">₹0.00 Cr</div>
+        <div class="kpi-sub" id="sub2425">₹ 0.00</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">FY 2025-26 Exp</div>
+        <div class="kpi-val" id="kpi2526">₹0.00 Cr</div>
+        <div class="kpi-sub" id="sub2526">₹ 0.00</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">FY 2026-27 Exp</div>
+        <div class="kpi-val" id="kpi2627">₹0.00 Cr</div>
+        <div class="kpi-sub" id="sub2627">₹ 0.00</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">FY 2027-28 Exp</div>
+        <div class="kpi-val" id="kpi2728">₹0.00 Cr</div>
+        <div class="kpi-sub" id="sub2728">₹ 0.00</div>
+      </div>
+      <div class="kpi-card grand">
+        <div class="kpi-title" style="color: #0d9488;">GRAND TOTAL EXPENDITURE</div>
+        <div class="kpi-val" id="kpiGrand" style="color: #0f766e;">₹0.00 Cr</div>
+        <div class="kpi-sub" id="subGrand">₹ 0.00</div>
+      </div>
+    </div>
+
+    <!-- Main Expenditure Statement Table -->
+    <div class="card-box">
+      <div class="card-header-bar">
+        <div>
+          <h2 class="card-title">WBADMIP PHASE II - DISTRICT & YEAR-WISE EXPENDITURE SUMMARY</h2>
+          <span style="font-size: 12px; color: var(--text-muted);">
+            Compiled accurately from scheme records starting from Row 6 onwards (excluding template headers & subtotals)
+          </span>
+        </div>
+        <button class="btn-export" onclick="exportSummaryToExcel()">
+          📥 Export Summary Table (.xlsx)
+        </button>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table class="summary-table" id="expSummaryTable">
+          <thead>
+            <tr>
+              <th style="text-align: center; width: 60px;">Sl. No.</th>
+              <th style="text-align: left; min-width: 220px;">District / Division</th>
+              <th style="text-align: right;">FY 23-24 (Rs)</th>
+              <th style="text-align: right;">FY 24-25 (Rs)</th>
+              <th style="text-align: right;">FY 25-26 (Rs)</th>
+              <th style="text-align: right;">FY 26-27 (Rs)</th>
+              <th style="text-align: right;">FY 27-28 (Rs)</th>
+              <th style="text-align: right; background: #0369a1;">Total Expenditure (Rs)</th>
+            </tr>
+          </thead>
+          <tbody id="summaryTableBody">
+            <tr>
+              <td colspan="8" style="text-align:center; padding: 24px; color: var(--text-muted);">
+                Awaiting workbook data...
+              </td>
+            </tr>
+          </tbody>
+          <tfoot id="summaryTableFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Interactive Graphical Analytics -->
+    <div class="charts-grid">
+      <div class="card-box">
+        <h3 class="card-title" style="margin-bottom: 12px;">Financial Year-wise Expenditure Trend</h3>
+        <canvas id="chartTrend" height="250"></canvas>
+      </div>
+      <div class="card-box">
+        <h3 class="card-title" style="margin-bottom: 12px;">Top Spending Districts / Divisions</h3>
+        <canvas id="chartDistricts" height="250"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="toast" id="toastMsg"></div>
+
+  <script>
+    /* =====================================================================
+       GLOBAL CONFIGURATION & STATE
+       ===================================================================== */
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwWx7d9gRKjGcNOC47Gf0LFftSfP7ufuVu5_7T4Qg8E8l9j7ZQ5O1Mn4qbcGNanseks-Q/exec";
+
+    const FINANCIAL_YEARS = ['23-24', '24-25', '25-26', '26-27', '27-28'];
+    let districtSummaryData = [];
+    let grandTotals = {
+      '23-24': 0, '24-25': 0, '25-26': 0, '26-27': 0, '27-28': 0, total: 0
+    };
+    let activeCharts = {};
+
+    const EXCLUDE_SHEETS = new Set([
+      'combined', 'combo(b)', 'instruction', 'sheet16',
+      'progress synapsis', 'copy of progress synapsis', 'tender synapsis',
+      'quaterly report ', 'quaterly report',
+      'spmu_a', ' spmu_a', 'spmu_c', 'spmu_d', ' spmu_d',
+      'district_expenditure_summary'
+    ]);
+
+    /* =====================================================================
+       CLEAN NUMBER & CURRENCY FORMATTERS
+       ===================================================================== */
+    function cleanNum(val) {
+      if (val === null || val === undefined) return 0;
+      if (typeof val === 'number') return isNaN(val) ? 0 : val;
+      let str = String(val).replace(/,/g, '').replace(/₹/g, '').trim();
+      let n = parseFloat(str);
+      return isNaN(n) ? 0 : n;
+    }
+
+    function formatIndianCurrency(val) {
+      return Number(val || 0).toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toastMsg');
+      t.innerText = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3500);
+    }
+
+    /* =====================================================================
+       CORE WORKBOOK PROCESSOR (Accurate Row 6+ Scanning)
+       ===================================================================== */
+    function processWorkbook(workbook, sourceLabel = "file") {
+      const sheetNames = workbook.SheetNames;
+      let districtMap = {};
+
+      // Strategy 1: Check if Individual District Sheets Exist
+      let individualDistrictSheets = sheetNames.filter(s => !EXCLUDE_SHEETS.has(s.trim().toLowerCase()));
+
+      if (individualDistrictSheets.length > 2) {
+        individualDistrictSheets.forEach(sheetName => {
+          const ws = workbook.Sheets[sheetName];
+          if (!ws) return;
+
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+          if (!rows || rows.length < 6) return;
+
+          let colMap = {};
+          FINANCIAL_YEARS.forEach(fy => colMap[fy] = -1);
+
+          for (let r = 0; r < Math.min(5, rows.length); r++) {
+            const rowData = rows[r];
+            for (let c = 0; c < rowData.length; c++) {
+              const cellText = String(rowData[c] || '').toLowerCase();
+              if (cellText.includes('expenditure') || cellText.includes('exp')) {
+                FINANCIAL_YEARS.forEach(fy => {
+                  if (cellText.includes(fy) || cellText.includes('20' + fy)) {
+                    if (colMap[fy] === -1) colMap[fy] = c;
+                  }
+                });
+              }
+            }
+          }
+
+          let distTotals = { '23-24': 0, '24-25': 0, '25-26': 0, '26-27': 0, '27-28': 0, total: 0 };
+
+          for (let r = 5; r < rows.length; r++) {
+            const rowData = rows[r];
+            const rowLabel = String(rowData[0] || '' + ' ' + String(rowData[1] || '')).toLowerCase();
+
+            if (!rowLabel.includes('total') && !rowLabel.includes('subtotal')) {
+              FINANCIAL_YEARS.forEach(fy => {
+                const cIdx = colMap[fy];
+                if (cIdx !== -1 && cIdx < rowData.length) {
+                  const amt = cleanNum(rowData[cIdx]);
+                  distTotals[fy] += amt;
+                  distTotals.total += amt;
+                }
+              });
+            }
+          }
+
+          districtMap[sheetName.trim()] = distTotals;
+        });
+
+      } else {
+        // Strategy 2: Fallback to master 'Combined' or 'Combo(B)' sheet
+        let masterSheetName = sheetNames.includes('Combined') ? 'Combined' : (sheetNames.includes('Combo(B)') ? 'Combo(B)' : sheetNames[0]);
+        const ws = workbook.Sheets[masterSheetName];
+        const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+        json.forEach(row => {
+          let aaAmt = cleanNum(row['AA Amount (Rs)'] || row['AA Amount']);
+          if (aaAmt > 0) {
+            let dist = String(row['District'] || row['DDO'] || 'Unspecified').replace('DUniversal', '').replace('DPMU', '').trim();
+            if (!dist || dist === 'Unspecified') return;
+
+            if (!districtMap[dist]) {
+              districtMap[dist] = { '23-24': 0, '24-25': 0, '25-26': 0, '26-27': 0, '27-28': 0, total: 0 };
+            }
+
+            FINANCIAL_YEARS.forEach(fy => {
+              let amt = cleanNum(row[`Expenditure Incurred (${fy}) (Rs)`]);
+              districtMap[dist][fy] += amt;
+              districtMap[dist].total += amt;
+            });
+          }
+        });
+      }
+
+      districtSummaryData = Object.keys(districtMap).sort((a,b) => a.localeCompare(b)).map(dist => ({
+        district: dist,
+        ...districtMap[dist]
+      }));
+
+      grandTotals = { '23-24': 0, '24-25': 0, '25-26': 0, '26-27': 0, '27-28': 0, total: 0 };
+      districtSummaryData.forEach(d => {
+        FINANCIAL_YEARS.forEach(fy => grandTotals[fy] += d[fy]);
+        grandTotals.total += d.total;
+      });
+
+      renderKPIs();
+      renderTable();
+      renderCharts();
+
+      document.getElementById('loadStatusText').innerHTML = `✅ <span style="color:#15803d;">Loaded ${districtSummaryData.length} districts (${sourceLabel})</span>`;
+      showToast(`Processed expenditure statement for ${districtSummaryData.length} districts!`);
+    }
+
+    /* =====================================================================
+       RENDER KPIS
+       ===================================================================== */
+    function renderKPIs() {
+      FINANCIAL_YEARS.forEach(fy => {
+        let code = fy.replace('-', '');
+        let amt = grandTotals[fy] || 0;
+        document.getElementById(`kpi${code}`).innerText = '₹' + (amt / 1e7).toFixed(2) + ' Cr';
+        document.getElementById(`sub${code}`).innerText = '₹ ' + formatIndianCurrency(amt);
+      });
+
+      document.getElementById('kpiGrand').innerText = '₹' + (grandTotals.total / 1e7).toFixed(2) + ' Cr';
+      document.getElementById(`subGrand`).innerText = '₹ ' + formatIndianCurrency(grandTotals.total);
+    }
+
+    /* =====================================================================
+       RENDER STATEMENT TABLE
+       ===================================================================== */
+    function renderTable() {
+      const tbody = document.getElementById('summaryTableBody');
+      const tfoot = document.getElementById('summaryTableFoot');
+      tbody.innerHTML = '';
+      tfoot.innerHTML = '';
+
+      if (districtSummaryData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 24px; color: var(--text-muted);">No records found in workbook.</td></tr>';
+        return;
+      }
+
+      districtSummaryData.forEach((d, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="text-align: center; font-weight: 600;">${idx + 1}</td>
+          <td style="text-align: left; font-weight: 600; color: var(--primary);">${d.district}</td>
+          <td style="text-align: right;">${formatIndianCurrency(d['23-24'])}</td>
+          <td style="text-align: right;">${formatIndianCurrency(d['24-25'])}</td>
+          <td style="text-align: right;">${formatIndianCurrency(d['25-26'])}</td>
+          <td style="text-align: right;">${formatIndianCurrency(d['26-27'])}</td>
+          <td style="text-align: right;">${formatIndianCurrency(d['27-28'])}</td>
+          <td style="text-align: right; font-weight: 700; color: #0f172a; background: #f8fafc;">
+            ${formatIndianCurrency(d.total)}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const footTr = document.createElement('tr');
+      footTr.innerHTML = `
+        <td style="text-align: center;"></td>
+        <td style="text-align: left;">GRAND TOTAL</td>
+        <td style="text-align: right;">${formatIndianCurrency(grandTotals['23-24'])}</td>
+        <td style="text-align: right;">${formatIndianCurrency(grandTotals['24-25'])}</td>
+        <td style="text-align: right;">${formatIndianCurrency(grandTotals['25-26'])}</td>
+        <td style="text-align: right;">${formatIndianCurrency(grandTotals['26-27'])}</td>
+        <td style="text-align: right;">${formatIndianCurrency(grandTotals['27-28'])}</td>
+        <td style="text-align: right; background: #bae6fd;">${formatIndianCurrency(grandTotals.total)}</td>
+      `;
+      tfoot.appendChild(footTr);
+    }
+
+    /* =====================================================================
+       RENDER CHARTS WITH DIRECT DATA LABELS
+       ===================================================================== */
+    function renderCharts() {
+      destroyChart('chartTrend');
+      activeCharts['chartTrend'] = new Chart(document.getElementById('chartTrend'), {
+        type: 'line',
+        plugins: [ChartDataLabels],
+        data: {
+          labels: FINANCIAL_YEARS.map(f => `FY ${f}`),
+          datasets: [{
+            label: 'Total Expenditure (₹ in Crores)',
+            data: FINANCIAL_YEARS.map(fy => (grandTotals[fy] / 1e7).toFixed(2)),
+            fill: true,
+            borderColor: '#0284c7',
+            backgroundColor: 'rgba(2, 132, 199, 0.12)',
+            tension: 0.35,
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            pointBackgroundColor: '#0284c7'
+          }]
+        },
+        options: {
+          responsive: true,
+          layout: { padding: { top: 28, right: 15 } },
+          scales: { y: { beginAtZero: true, grace: '12%' } },
+          plugins: {
+            datalabels: {
+              align: 'top',
+              anchor: 'end',
+              offset: 6,
+              color: '#0369a1',
+              font: { weight: 'bold', size: 11 },
+              backgroundColor: 'rgba(240, 249, 255, 0.95)',
+              borderColor: '#bae6fd',
+              borderWidth: 1,
+              borderRadius: 4,
+              padding: { top: 2, bottom: 2, left: 6, right: 6 },
+              formatter: function(value) {
+                return `₹${parseFloat(value).toLocaleString()} Cr`;
+              }
+            }
+          }
+        }
+      });
+
+      const topDistricts = [...districtSummaryData]
+        .sort((a,b) => b.total - a.total)
+        .slice(0, 8);
+
+      destroyChart('chartDistricts');
+      activeCharts['chartDistricts'] = new Chart(document.getElementById('chartDistricts'), {
+        type: 'bar',
+        plugins: [ChartDataLabels],
+        data: {
+          labels: topDistricts.map(d => d.district),
+          datasets: [{
+            label: 'Total Exp (₹ in Crores)',
+            data: topDistricts.map(d => (d.total / 1e7).toFixed(2)),
+            backgroundColor: '#10b981',
+            borderRadius: 4
+          }]
+        },
+        options: {
+          responsive: true,
+          layout: { padding: { top: 25 } },
+          scales: { y: { beginAtZero: true, grace: '10%' } },
+          plugins: {
+            legend: { display: false },
+            datalabels: {
+              anchor: 'end',
+              align: 'top',
+              offset: 4,
+              font: { weight: 'bold', size: 10 },
+              color: '#15803d',
+              formatter: function(val) {
+                return `₹${val} Cr`;
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function destroyChart(id) {
+      if (activeCharts[id]) {
+        activeCharts[id].destroy();
+        delete activeCharts[id];
+      }
+    }
+
+    /* =====================================================================
+       EXPORT SUMMARY TO EXCEL (.XLSX)
+       ===================================================================== */
+    function exportSummaryToExcel() {
+      if (!districtSummaryData || districtSummaryData.length === 0) {
+        alert("No data available to export.");
+        return;
+      }
+
+      const rowsToExport = districtSummaryData.map((d, idx) => ({
+        "Sl. No.": idx + 1,
+        "District / Division": d.district,
+        "FY 23-24 (Rs)": d['23-24'],
+        "FY 24-25 (Rs)": d['24-25'],
+        "FY 25-26 (Rs)": d['25-26'],
+        "FY 26-27 (Rs)": d['26-27'],
+        "FY 27-28 (Rs)": d['27-28'],
+        "Total Expenditure (Rs)": d.total
+      }));
+
+      rowsToExport.push({
+        "Sl. No.": "",
+        "District / Division": "GRAND TOTAL",
+        "FY 23-24 (Rs)": grandTotals['23-24'],
+        "FY 24-25 (Rs)": grandTotals['24-25'],
+        "FY 25-26 (Rs)": grandTotals['25-26'],
+        "FY 26-27 (Rs)": grandTotals['26-27'],
+        "FY 27-28 (Rs)": grandTotals['27-28'],
+        "Total Expenditure (Rs)": grandTotals.total
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rowsToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "District_Exp_Summary");
+
+      const filename = `WBADMIP_District_Expenditure_Summary_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, filename);
+      showToast(`Exported ${districtSummaryData.length} districts to ${filename}`);
+    }
+
+    /* =====================================================================
+       CONNECT AND SYNC WITH LIVE GOOGLE SHEET VIA APPS SCRIPT
+       ===================================================================== */
+    async function loadFromGoogleSheets() {
+      const statusEl = document.getElementById('loadStatusText');
+      statusEl.innerHTML = `⏳ <span style="color:var(--primary);">Fetching live Google Sheet data...</span>`;
+
+      try {
+        const res = await fetch(`${APPS_SCRIPT_URL}?t=${Date.now()}`, {
+          method: 'GET',
+          redirect: 'follow'
+        });
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+
+        const rawText = await res.text();
+        let result;
+
+        try {
+          result = JSON.parse(rawText);
+        } catch (jsonErr) {
+          if (rawText.includes("accounts.google.com") || rawText.includes("Sign in")) {
+            throw new Error("Authentication required. Set 'Who has access' to 'Anyone' in Apps Script Deployment.");
+          }
+          throw new Error("Invalid response received from Apps Script.");
+        }
+
+        if (!result.success || !result.sheets) {
+          throw new Error(result.error || "Failed to parse Google Sheet.");
+        }
+
+        // Convert the JSON response into a SheetJS compatible workbook
+        const workbook = {
+          SheetNames: Object.keys(result.sheets),
+          Sheets: {}
+        };
+
+        Object.keys(result.sheets).forEach(sheetName => {
+          const raw2DArray = result.sheets[sheetName];
+          workbook.Sheets[sheetName] = XLSX.utils.aoa_to_sheet(raw2DArray);
+        });
+
+        // Run your exact proven scanning and calculation logic
+        processWorkbook(workbook, "Live Google Sheet");
+
+      } catch (err) {
+        console.error("Live Google Sheet load failed:", err);
+        statusEl.innerHTML = `⚠️ <span style="color:#b91c1c;">Could not fetch Google Sheet. Use manual upload below.</span>`;
+        showToast("Error fetching Google Sheet: " + err.message);
+      }
+    }
+
+    // Manual upload listener (Fallback)
+    document.getElementById('excelFileInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      showToast(`Reading ${file.name}...`);
+      const reader = new FileReader();
+
+      reader.onload = function(evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          processWorkbook(workbook, `manual upload (${file.name})`);
+        } catch (err) {
+          console.error(err);
+          alert("Error reading uploaded file. Please make sure it is a valid .xlsx file.");
+        }
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+
+    // Auto-fetch from Google Sheet on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      loadFromGoogleSheets();
+    });
+  </script>
+</body>
+</html>

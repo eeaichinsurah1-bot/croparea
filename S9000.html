@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GIS Polygon & Scheme Point Spatial Analyzer</title>
+
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Turf.js for Point-in-Polygon calculations -->
+    <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+    <!-- SheetJS for Excel Generation -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <!-- PapaParse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
+        header { background: #1f497d; color: white; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; }
+        .controls { display: flex; gap: 15px; align-items: center; background: #ecf0f1; padding: 10px 20px; border-bottom: 1px solid #ccc; flex-wrap: wrap; }
+        .input-group { display: flex; flex-direction: column; font-size: 12px; }
+        .input-group label { margin-bottom: 3px; font-weight: bold; }
+        .input-group input { padding: 4px; font-size: 12px; width: 130px; }
+        #main-container { display: flex; flex: 1; overflow: hidden; }
+        #map { flex: 2; height: 100%; }
+        #sidebar { flex: 1; min-width: 440px; background: #fff; border-left: 1px solid #ccc; overflow-y: auto; padding: 15px; }
+        button { background: #27ae60; color: white; border: none; padding: 8px 15px; font-weight: bold; cursor: pointer; border-radius: 4px; }
+        button:disabled { background: #95a5a6; cursor: not-allowed; }
+        button:hover:not(:disabled) { background: #219150; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+        th, td { border: 1px solid #ddd; padding: 5px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .table-container { max-height: 220px; overflow-y: auto; margin-top: 8px; margin-bottom: 15px; }
+        tr.total-row { font-weight: bold; background-color: #eaeded; }
+        .synopsis-box { background: #f8f9fa; border: 1px solid #cbd5e1; padding: 10px; border-radius: 5px; margin-bottom: 15px; font-size: 11px; }
+        .synopsis-box h4 { margin: 0 0 8px 0; color: #1f497d; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h2>GIS Boundary vs Scheme Points Analyzer</h2>
+    </header>
+
+    <div class="controls">
+        <div class="input-group">
+            <label for="geojson-input">1. Upload GeoJSON:</label>
+            <input type="file" id="geojson-input" accept=".geojson,.json" />
+        </div>
+        <div class="input-group">
+            <label for="csv-input">2. Upload CSV (Points):</label>
+            <input type="file" id="csv-input" accept=".csv" />
+        </div>
+        <div class="input-group">
+            <label for="lat-col">Latitude Column:</label>
+            <input type="text" id="lat-col" value="Lat" />
+        </div>
+        <div class="input-group">
+            <label for="lng-col">Longitude Column:</label>
+            <input type="text" id="lng-col" value="Long" />
+        </div>
+        <div class="input-group">
+            <label for="scheme-col">Scheme Type Column:</label>
+            <input type="text" id="scheme-col" value="Type of scheme" />
+        </div>
+        <div style="margin-top: 15px;">
+            <button id="process-btn" onclick="processData()">Analyze & Count</button>
+            <button id="export-btn" onclick="exportToExcel()" disabled>Export Excel Report</button>
+        </div>
+    </div>
+
+    <div id="main-container">
+        <div id="map"></div>
+        <div id="sidebar">
+            <h3>Analysis Summary</h3>
+            <div id="summary-content">Please upload files and click "Analyze & Count".</div>
+        </div>
+    </div>
+
+    <script>
+        const map = L.map('map').setView([23.0, 87.8], 8);
+
+        const googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+            maxZoom: 20,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+            attribution: 'Map data ©2026 Google'
+        });
+        googleHybrid.addTo(map);
+
+        let geojsonLayer = null;
+        let pointsLayer = null;
+        let geojsonData = null;
+        let csvData = [];
+        let reportData = [];
+        let districtSummaryData = [];
+        let globalSynopsis = {};
+
+        const schemeCategories = [
+            "Tube Well (TW / Solar)", 
+            "Re-Excavation", 
+            "Water Detention Structure (WDS)", 
+            "Pond Development Works (PDW)", 
+            "Other Works"
+        ];
+
+        document.getElementById('geojson-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    geojsonData = JSON.parse(evt.target.result);
+                    alert("GeoJSON loaded successfully.");
+                } catch (err) {
+                    alert("Invalid GeoJSON file.");
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        document.getElementById('csv-input').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            Papa.parse(file, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    csvData = results.data;
+                    alert("CSV loaded successfully (" + csvData.length + " rows).");
+                }
+            });
+        });
+
+        function classifyScheme(val) {
+            if (!val) return "Other Works";
+            let v = String(val).trim().toUpperCase();
+            if (v.includes('TW')) return "Tube Well (TW / Solar)";
+            if (v.includes('RE') || v.includes('EXCAVATION')) return "Re-Excavation";
+            if (v.includes('WDS')) return "Water Detention Structure (WDS)";
+            if (v.includes('PDW')) return "Pond Development Works (PDW)";
+            return "Other Works";
+        }
+
+        function getRowValue(row, targetKey) {
+            if (!row || !targetKey) return undefined;
+            const cleanTarget = String(targetKey).trim().toLowerCase();
+            for (let key in row) {
+                if (key.trim().toLowerCase() === cleanTarget) {
+                    return row[key];
+                }
+            }
+            return undefined;
+        }
+
+        function processData() {
+            if (!geojsonData) {
+                alert("Please select and load a GeoJSON file first.");
+                return;
+            }
+            if (!csvData || csvData.length === 0) {
+                alert("Please select and load a CSV file first.");
+                return;
+            }
+
+            const latInput = document.getElementById('lat-col').value;
+            const lngInput = document.getElementById('lng-col').value;
+            const schemeInput = document.getElementById('scheme-col').value;
+
+            if (geojsonLayer) map.removeLayer(geojsonLayer);
+            if (pointsLayer) map.removeLayer(pointsLayer);
+
+            const turfPoints = [];
+            const schemeTotals = {};
+            schemeCategories.forEach(cat => schemeTotals[cat] = 0);
+
+            csvData.forEach((row, idx) => {
+                const latVal = getRowValue(row, latInput);
+                const lngVal = getRowValue(row, lngInput);
+                const rawScheme = getRowValue(row, schemeInput);
+
+                const lat = parseFloat(latVal);
+                const lng = parseFloat(lngVal);
+                const category = classifyScheme(rawScheme);
+
+                if (!isNaN(lat) && !isNaN(lng)) {
+                    schemeTotals[category] = (schemeTotals[category] || 0) + 1;
+                    const pointFeature = turf.point([lng, lat], { 
+                        id: idx,
+                        ...row, 
+                        mapped_category: category,
+                        raw_scheme: rawScheme,
+                        isInside: false,
+                        containingPolygon: null
+                    });
+                    turfPoints.push(pointFeature);
+                }
+            });
+
+            if (turfPoints.length === 0) {
+                alert("Warning: 0 points were plotted. Please verify your Latitude and Longitude column names.");
+                return;
+            }
+
+            // Step 1: Pre-calculate exact unique point containment across all polygons
+            const features = geojsonData.features || [];
+            turfPoints.forEach(pt => {
+                for (let i = 0; i < features.length; i++) {
+                    if (turf.booleanPointInPolygon(pt, features[i])) {
+                        pt.properties.isInside = true;
+                        pt.properties.containingPolygon = features[i];
+                        break; // Stop at first containing polygon to avoid double counting
+                    }
+                }
+            });
+
+            // Step 2: Calculate Global Synopsis Totals
+            const uniqueInsideTotals = {};
+            const uniqueOutsideTotals = {};
+            schemeCategories.forEach(cat => {
+                uniqueInsideTotals[cat] = 0;
+                uniqueOutsideTotals[cat] = 0;
+            });
+
+            turfPoints.forEach(pt => {
+                const cat = pt.properties.mapped_category;
+                if (pt.properties.isInside) {
+                    uniqueInsideTotals[cat]++;
+                } else {
+                    uniqueOutsideTotals[cat]++;
+                }
+            });
+
+            globalSynopsis = {
+                totalPoints: turfPoints.length,
+                categories: schemeCategories,
+                datasetTotals: schemeTotals,
+                insideTotals: uniqueInsideTotals,
+                outsideTotals: uniqueOutsideTotals
+            };
+
+            // Step 3: Accumulate Polygon & District Breakdown using unique point containment
+            reportData = [];
+            const districtMap = {};
+
+            geojsonLayer = L.geoJSON(geojsonData, {
+                style: {
+                    color: '#f1c40f',
+                    weight: 2,
+                    fillOpacity: 0.1
+                },
+                onEachFeature: function(feature, layer) {
+                    const props = feature.properties || {};
+                    const mouzaName = props.mouza || props.name || `Polygon_${props.objectid || props.id || 'Unknown'}`;
+                    const blockName = props.block || 'N/A';
+                    const district = props.district ? String(props.district).trim() : 'Unspecified';
+
+                    if (!districtMap[district]) {
+                        districtMap[district] = {
+                            "District": district,
+                            "Total Polygons": 0,
+                            "Tube Well (In)": 0,
+                            "Re-Excavation (In)": 0,
+                            "WDS (In)": 0,
+                            "PDW (In)": 0,
+                            "Other (In)": 0
+                        };
+                    }
+                    districtMap[district]["Total Polygons"]++;
+
+                    const insideCounts = {};
+                    schemeCategories.forEach(cat => insideCounts[cat] = 0);
+
+                    // Count points whose containing polygon is strictly this feature
+                    turfPoints.forEach(pt => {
+                        if (pt.properties.isInside && pt.properties.containingPolygon === feature) {
+                            const cat = pt.properties.mapped_category;
+                            insideCounts[cat] = (insideCounts[cat] || 0) + 1;
+                        }
+                    });
+
+                    districtMap[district]["Tube Well (In)"] += insideCounts["Tube Well (TW / Solar)"];
+                    districtMap[district]["Re-Excavation (In)"] += insideCounts["Re-Excavation"];
+                    districtMap[district]["WDS (In)"] += insideCounts["Water Detention Structure (WDS)"];
+                    districtMap[district]["PDW (In)"] += insideCounts["Pond Development Works (PDW)"];
+                    districtMap[district]["Other (In)"] += insideCounts["Other Works"];
+
+                    const rowReport = {
+                        "District": district,
+                        "Block": blockName,
+                        "Mouza / Boundary": mouzaName,
+                        "Tube Well (In)": insideCounts["Tube Well (TW / Solar)"],
+                        "Re-Excavation (In)": insideCounts["Re-Excavation"],
+                        "WDS (In)": insideCounts["Water Detention Structure (WDS)"],
+                        "PDW (In)": insideCounts["Pond Development Works (PDW)"],
+                        "Other (In)": insideCounts["Other Works"]
+                    };
+
+                    reportData.push(rowReport);
+
+                    layer.bindPopup(`<b>${mouzaName}</b><br/>District: ${district} | Block: ${blockName}<br/><hr/>` +
+                        `WDS (In): ${insideCounts["Water Detention Structure (WDS)"]}<br/>` +
+                        `Tube Well (In): ${insideCounts["Tube Well (TW / Solar)"]}`
+                    );
+                }
+            }).addTo(map);
+
+            districtSummaryData = Object.values(districtMap);
+
+            const pointCollection = turf.featureCollection(turfPoints);
+            pointsLayer = L.geoJSON(pointCollection, {
+                pointToLayer: function(feature, latlng) {
+                    let color = feature.properties.isInside ? '#27ae60' : '#e74c3c'; // Green if inside, Red if outside
+                    return L.circleMarker(latlng, {
+                        radius: 4,
+                        fillColor: color,
+                        color: "#fff",
+                        weight: 1,
+                        opacity: 1,
+                        fillOpacity: 0.85
+                    });
+                },
+                onEachFeature: function(feature, layer) {
+                    const props = feature.properties;
+                    const mouzaName = getRowValue(props, 'Mouza') || 'N/A';
+                    const status = props.isInside ? 'Inside Polygon' : 'Outside Polygon';
+                    layer.bindPopup(`<b>Status:</b> ${status}<br/><b>Mouza:</b> ${mouzaName}<br/><b>Type:</b> ${props.raw_scheme || 'N/A'}`);
+                }
+            }).addTo(map);
+
+            if (geojsonLayer.getBounds().isValid()) {
+                map.fitBounds(geojsonLayer.getBounds());
+            }
+
+            renderSummaryTable();
+            document.getElementById('export-btn').disabled = false;
+        }
+
+        function renderSummaryTable() {
+            const container = document.getElementById('summary-content');
+            if (reportData.length === 0) {
+                container.innerHTML = "No boundary data evaluated.";
+                return;
+            }
+
+            let tTW = 0, tRe = 0, tWDS = 0, tPDW = 0, tOther = 0;
+            reportData.forEach(r => {
+                tTW += r["Tube Well (In)"];
+                tRe += r["Re-Excavation (In)"];
+                tWDS += r["WDS (In)"];
+                tPDW += r["PDW (In)"];
+                tOther += r["Other (In)"];
+            });
+
+            // 1. Synopsis Box (Guaranteed exact tally with District/Polygon sums)
+            let html = `<div class="synopsis-box">
+                <h4>📊 Scheme Synopsis (Inside vs Outside)</h4>
+                <table>
+                    <thead>
+                        <tr><th>Scheme Category</th><th>Dataset Total</th><th>Inside Polygons</th><th>Outside Polygons</th></tr>
+                    </thead>
+                    <tbody>`;
+            
+            schemeCategories.forEach(cat => {
+                html += `<tr>
+                    <td><b>${cat}</b></td>
+                    <td>${globalSynopsis.datasetTotals[cat]}</td>
+                    <td>${globalSynopsis.insideTotals[cat]}</td>
+                    <td><b>${globalSynopsis.outsideTotals[cat]}</b></td>
+                </tr>`;
+            });
+            html += `</tbody></table></div>`;
+
+            // 2. District-Wise Summary Table
+            html += `<h4>📍 District-Wise Summary (Inside Polygons)</h4>`;
+            html += `<div class="table-container"><table><thead><tr>
+                <th>District</th><th>Polygons</th><th>TW (In)</th><th>Re-Exc (In)</th><th>WDS (In)</th><th>PDW (In)</th>
+            </tr></thead><tbody>`;
+
+            districtSummaryData.forEach(d => {
+                html += `<tr>
+                    <td><b>${d["District"]}</b></td>
+                    <td>${d["Total Polygons"]}</td>
+                    <td>${d["Tube Well (In)"]}</td>
+                    <td>${d["Re-Excavation (In)"]}</td>
+                    <td>${d["WDS (In)"]}</td>
+                    <td>${d["PDW (In)"]}</td>
+                </tr>`;
+            });
+            html += `</tbody></table></div>`;
+
+            // 3. Mouza-Wise Breakdown Table
+            html += `<h4>📍 Mouza-Wise Breakdown (${reportData.length} Polygons)</h4>`;
+            html += `<div class="table-container"><table><thead><tr>
+                <th>Mouza / Boundary</th><th>TW (In)</th><th>Re-Exc (In)</th><th>WDS (In)</th><th>PDW (In)</th>
+            </tr></thead><tbody>`;
+
+            reportData.forEach(row => {
+                html += `<tr>
+                    <td>${row["Mouza / Boundary"]}</td>
+                    <td>${row["Tube Well (In)"]}</td>
+                    <td>${row["Re-Excavation (In)"]}</td>
+                    <td>${row["WDS (In)"]}</td>
+                    <td>${row["PDW (In)"]}</td>
+                </tr>`;
+            });
+
+            html += `<tr class="total-row">
+                <td>GRAND TOTAL (Inside)</td>
+                <td>${tTW}</td>
+                <td>${tRe}</td>
+                <td>${tWDS}</td>
+                <td>${tPDW}</td>
+            </tr>`;
+
+            html += `</tbody></table></div>`;
+            container.innerHTML = html;
+        }
+
+        function exportToExcel() {
+            if (reportData.length === 0) {
+                alert("No summary data to export.");
+                return;
+            }
+
+            let tTW = 0, tRe = 0, tWDS = 0, tPDW = 0, tOther = 0;
+            reportData.forEach(r => {
+                tTW += r["Tube Well (In)"];
+                tRe += r["Re-Excavation (In)"];
+                tWDS += r["WDS (In)"];
+                tPDW += r["PDW (In)"];
+                tOther += r["Other (In)"];
+            });
+
+            const wb = XLSX.utils.book_new();
+
+            // Sheet 1: Scheme Synopsis
+            const synopsisRows = [
+                ["Scheme Category", "Total Dataset Points", "Points Inside Polygons", "Points Outside Polygons"]
+            ];
+            schemeCategories.forEach(cat => {
+                synopsisRows.push([
+                    cat, 
+                    globalSynopsis.datasetTotals[cat], 
+                    globalSynopsis.insideTotals[cat], 
+                    globalSynopsis.outsideTotals[cat]
+                ]);
+            });
+            const wsSynopsis = XLSX.utils.aoa_to_sheet(synopsisRows);
+            XLSX.utils.book_append_sheet(wb, wsSynopsis, "Scheme Synopsis");
+
+            // Sheet 2: District-Wise Summary
+            const wsDistrict = XLSX.utils.json_to_sheet(districtSummaryData);
+            XLSX.utils.book_append_sheet(wb, wsDistrict, "District Summary");
+
+            // Sheet 3: Polygon/Mouza Breakdown with Grand Total Row
+            const exportRows = reportData.map(r => ({
+                "District": r["District"],
+                "Block": r["Block"],
+                "Mouza / Boundary": r["Mouza / Boundary"],
+                "Tube Well (In)": r["Tube Well (In)"],
+                "Re-Excavation (In)": r["Re-Excavation (In)"],
+                "WDS (In)": r["WDS (In)"],
+                "PDW (In)": r["PDW (In)"],
+                "Other (In)": r["Other (In)"]
+            }));
+
+            exportRows.push({
+                "District": "",
+                "Block": "",
+                "Mouza / Boundary": "GRAND TOTAL (Inside)",
+                "Tube Well (In)": tTW,
+                "Re-Excavation (In)": tRe,
+                "WDS (In)": tWDS,
+                "PDW (In)": tPDW,
+                "Other (In)": tOther
+            });
+
+            const wsMouza = XLSX.utils.json_to_sheet(exportRows);
+            XLSX.utils.book_append_sheet(wb, wsMouza, "Polygon Breakdown");
+
+            XLSX.writeFile(wb, "Polygon_Scheme_Spatial_Report.xlsx");
+        }
+    </script>
+</body>
+</html>

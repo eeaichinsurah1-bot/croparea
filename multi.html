@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guided Multi-Crop MI Command & Feasibility Engine</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --primary-light: #2563eb;
+            --accent-success: #059669;
+            --accent-warning: #d97706;
+            --accent-danger: #dc2626;
+            --bg-slate: #f8fafc;
+            --card-border: #e2e8f0;
+        }
+        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background: #edf2f7; margin: 0; padding: 20px; color: #1e293b; }
+        .container { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 20px; }
+        @media (min-width: 1040px) { .container { grid-template-columns: 500px 1fr; } }
+        
+        .card { background: #ffffff; border-radius: 10px; border: 1px solid var(--card-border); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); padding: 22px; }
+        h1 { font-size: 1.25rem; font-weight: 700; color: var(--primary); margin: 0 0 4px 0; }
+        .sub-author { font-size: 0.8rem; color: #64748b; margin-bottom: 16px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .section-title { font-size: 0.82rem; font-weight: 700; text-transform: uppercase; color: #475569; margin: 16px 0 8px 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
+        .form-group { margin-bottom: 10px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        label { display: block; font-size: 0.76rem; font-weight: 600; color: #334155; margin-bottom: 3px; }
+        input, select { width: 100%; padding: 7px 9px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; font-size: 0.85rem; background: #f8fafc; color: #0f172a; }
+        input:focus, select:focus { outline: none; border-color: var(--primary-light); background: #ffffff; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15); }
+        
+        /* Guide & Presets Box */
+        .guide-box { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; margin-bottom: 14px; }
+        .guide-title { font-size: 0.8rem; font-weight: 700; color: #166534; display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+        .guide-desc { font-size: 0.76rem; color: #15803d; line-height: 1.4; margin-bottom: 10px; }
+        .preset-container { display: flex; flex-wrap: wrap; gap: 6px; }
+        .btn-preset { background: #ffffff; color: #1e3a8a; border: 1px solid #cbd5e1; padding: 5px 9px; border-radius: 5px; font-size: 0.74rem; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        .btn-preset:hover { background: #e0e7ff; border-color: var(--primary-light); color: var(--primary-light); }
+        
+        /* Crop Pattern Table */
+        .pattern-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.78rem; }
+        .pattern-table th { background: #f1f5f9; padding: 6px 8px; text-align: left; font-weight: 700; color: #475569; border-bottom: 2px solid #e2e8f0; }
+        .pattern-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+        .pattern-table input { padding: 4px 6px; font-size: 0.8rem; }
+        .btn-remove { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 4px; cursor: pointer; padding: 3px 6px; font-weight: 700; }
+        
+        .table-action-row { display: flex; gap: 8px; margin-top: 8px; }
+        .btn-action-small { background: #f8fafc; color: #475569; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 6px 10px; font-weight: 600; font-size: 0.75rem; cursor: pointer; flex: 1; text-align: center; }
+        .btn-action-small:hover { background: #f1f5f9; border-color: var(--primary-light); color: var(--primary-light); }
+        
+        .pct-tracker { font-size: 0.8rem; font-weight: 700; padding: 7px 10px; border-radius: 6px; margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .pct-balanced { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .pct-imbalanced { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+        .seasonal-advisory { margin-top: 8px; padding: 8px 10px; border-radius: 6px; font-size: 0.75rem; line-height: 1.4; display: none; }
+        .advisory-warn { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; display: block; }
+
+        .btn-calc { width: 100%; background: var(--primary); color: #ffffff; border: none; padding: 12px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 0.95rem; margin-top: 14px; }
+        .btn-calc:hover { background: #172554; }
+        .btn-export { background: #b91c1c; color: #ffffff; border: none; padding: 8px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.82rem; float: right; }
+        .btn-export:hover { background: #991b1b; }
+        
+        .status-badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+        .badge-success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .badge-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        
+        .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-top: 12px; }
+        .metric-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; }
+        .metric-label { font-size: 0.7rem; text-transform: uppercase; font-weight: 700; color: #64748b; }
+        .metric-value { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin-top: 3px; }
+        .metric-unit { font-size: 0.74rem; font-weight: 500; color: #64748b; }
+        
+        .recommendation-box { margin-top: 18px; padding: 14px; border-radius: 8px; background: #eff6ff; border-left: 4px solid var(--primary-light); font-size: 0.85rem; line-height: 1.5; }
+        
+        .results-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.8rem; }
+        .results-table th { background: #f8fafc; text-align: left; padding: 8px; border-bottom: 2px solid #e2e8f0; color: #475569; }
+        .results-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; }
+
+        /* Calendar Reference Drawer */
+        details.calendar-drawer { margin-top: 18px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; font-size: 0.78rem; }
+        details.calendar-drawer summary { font-weight: 700; color: var(--primary); cursor: pointer; outline: none; }
+        .cal-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.74rem; }
+        .cal-table th { background: #e2e8f0; text-align: left; padding: 5px; color: #334155; }
+        .cal-table td { padding: 5px; border-bottom: 1px solid #e2e8f0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- INPUT & GUIDANCE PANEL -->
+    <div class="card">
+        <h1>Multi-Crop Feasibility Engine</h1>
+        <div class="sub-author">Engineered by: Dayamoy Ghosh, EE</div>
+        
+        <!-- Guided Cropping Selection Helper -->
+        <div class="guide-box">
+            <div class="guide-title">
+                <span>🌾 Step 1: Guided Crop Selection (West Bengal)</span>
+            </div>
+            <div class="guide-desc">
+                Select a recommended regional cropping pattern preset below, or customize individual crops and percentage shares. Ensure total share equals <strong>100%</strong>.
+            </div>
+            <div class="preset-container">
+                <button type="button" class="btn-preset" onclick="loadPreset('rabi')">❄️ Rabi (Potato + Mustard + Wheat)</button>
+                <button type="button" class="btn-preset" onclick="loadPreset('summer_boro')">☀️ Summer (Boro + Til + Groundnut)</button>
+                <button type="button" class="btn-preset" onclick="loadPreset('summer_water_smart')">💧 Water-Smart (Til + Groundnut + Mung)</button>
+                <button type="button" class="btn-preset" onclick="loadPreset('kharif')">🌧️ Kharif (Aman + Jute + Biuli)</button>
+            </div>
+        </div>
+
+        <div class="section-title">2. Installation Hydraulic Capacity</div>
+        <div class="form-group">
+            <label>Scheme / Structure Identification</label>
+            <input type="text" id="schemeName" value="WDS-Bankura Multi-Crop Command">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Total Proposed Command Area</label>
+                <input type="number" id="totalAreaQty" value="30" step="0.5" min="0">
+            </div>
+            <div class="form-group">
+                <label>Command Area Unit</label>
+                <select id="areaUnit">
+                    <option value="1337.8" selected>Bigha (1337.8 m²)</option>
+                    <option value="66.89">Katha (66.89 m²)</option>
+                    <option value="4046.86">Acre (4046.86 m²)</option>
+                    <option value="10000">Hectare (10000 m²)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Discharge Rate Q</label>
+                <input type="number" id="dischargeVal" value="36" step="0.5">
+            </div>
+            <div class="form-group">
+                <label>Discharge Unit</label>
+                <select id="dischargeUnit">
+                    <option value="cum_hr" selected>m³/Hour (cum/hr)</option>
+                    <option value="lps">Litres / Sec (LPS)</option>
+                    <option value="cusec">Cusec (cft/sec)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Max Pumping (Hrs/Day)</label>
+                <input type="number" id="maxDailyHrs" value="10" step="0.5" max="24">
+            </div>
+            <div class="form-group">
+                <label>Prime Mover Motor (HP)</label>
+                <input type="number" id="motorHP" value="5" step="0.5">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Soil Type (System Loss %)</label>
+                <select id="soilSelect" onchange="onSoilChange()">
+                    <option value="15" data-en="Clay / Heavy">Clay / Heavy (15%)</option>
+                    <option value="22" data-en="Loamy / Medium" selected>Loamy / Normal (22%)</option>
+                    <option value="35" data-en="Sandy / Laterite">Sandy / Laterite (35%)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>System Loss (%)</label>
+                <input type="number" id="lossPercent" value="22" step="1">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Seasonal Rain Offset (Inches)</label>
+                <input type="number" id="rainOffset" value="0" step="0.5">
+            </div>
+            <div class="form-group">
+                <label>Tariff (Rs / kWh Unit)</label>
+                <input type="number" id="tariffRate" value="7.50" step="0.1">
+            </div>
+        </div>
+
+        <div class="section-title">
+            <span>3. Multi-Crop Pattern & Share %</span>
+            <span style="font-size: 0.7rem; color: #64748b; font-weight: normal;">Base Period B in days</span>
+        </div>
+        
+        <table class="pattern-table" id="cropPatternTable">
+            <thead>
+                <tr>
+                    <th style="width: 38%;">Crop Name</th>
+                    <th style="width: 20%;">Share %</th>
+                    <th style="width: 18%;">Delta (")</th>
+                    <th style="width: 16%;">B (Days)</th>
+                    <th style="width: 8%;"></th>
+                </tr>
+            </thead>
+            <tbody id="cropPatternBody">
+                <!-- Dynamically Populated -->
+            </tbody>
+        </table>
+        
+        <div class="table-action-row">
+            <button type="button" class="btn-action-small" id="btnAddCropRow">+ Add Crop</button>
+            <button type="button" class="btn-action-small" onclick="autoDistributeRemaining()">Auto-Distribute Remaining %</button>
+            <button type="button" class="btn-action-small" onclick="equalizeShares()">Equalize Shares</button>
+        </div>
+        
+        <div id="pctTracker" class="pct-tracker pct-balanced">
+            <span>Total Crop Pattern Share:</span>
+            <span id="lblTotalPct">100%</span>
+        </div>
+
+        <div id="seasonalAdvisory" class="seasonal-advisory"></div>
+
+        <button type="button" class="btn-calc" id="btnCalculate">Run Multi-Crop Feasibility</button>
+
+        <!-- Technical Reference Calendar Drawer -->
+        <details class="calendar-drawer">
+            <summary>📅 View West Bengal Crop Calendar Reference</summary>
+            <table class="cal-table">
+                <thead>
+                    <tr><th>Crop</th><th>Season</th><th>Sowing-Harvest</th><th>Peak Stage</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Boro Rice</td><td>Summer</td><td>Jan – May</td><td>Panicle / April</td></tr>
+                    <tr><td>Aman Rice</td><td>Kharif</td><td>July – Dec</td><td>Oct / Flowering</td></tr>
+                    <tr><td>Potato</td><td>Rabi</td><td>Nov – March</td><td>Dec-Jan / Tuber</td></tr>
+                    <tr><td>Mustard</td><td>Rabi</td><td>Oct – Feb</td><td>Dec / Siliqua</td></tr>
+                    <tr><td>Til (Sesame)</td><td>Summer</td><td>Feb – May</td><td>April / Pods</td></tr>
+                    <tr><td>Groundnut</td><td>Summer</td><td>Jan – June</td><td>April / Pegging</td></tr>
+                    <tr><td>Wheat</td><td>Rabi</td><td>Nov – April</td><td>Dec (CRI Stage)</td></tr>
+                    <tr><td>Mung / Biuli</td><td>Summer/Kharif</td><td>Feb-May / Aug-Nov</td><td>Pod formation</td></tr>
+                </tbody>
+            </table>
+        </details>
+    </div>
+
+    <!-- TECHNICAL FEASIBILITY & HYDRAULIC VERIFICATION OUTPUT -->
+    <div class="card">
+        <div style="overflow: auto;">
+            <button type="button" class="btn-export" id="btnExport">Export Technical Audit PDF</button>
+            <h1 style="font-size: 1.15rem; margin-top: 4px;">Composite Hydraulic Verification</h1>
+        </div>
+        
+        <div id="resultsContainer" style="margin-top: 15px;">
+            <div id="statusBadge" class="status-badge badge-success">Feasibility Ready</div>
+            
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Target Command Area</div>
+                    <div class="metric-value" id="dispProposedBigha">--</div>
+                    <div class="metric-unit" id="dispProposedAlt">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Max Irrigable Command Area</div>
+                    <div class="metric-value" id="dispMaxBigha" style="color: var(--primary);">--</div>
+                    <div class="metric-unit" id="dispMaxAlt">--</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Composite Gross Delta</div>
+                    <div class="metric-value" id="dispCompDelta">--</div>
+                    <div class="metric-unit">Weighted Depth (m & inches)</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Composite Field Duty</div>
+                    <div class="metric-value" id="dispDutyBigha">--</div>
+                    <div class="metric-unit">Bigha / Cusec</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Water Required</div>
+                    <div class="metric-value" id="dispReqWater">--</div>
+                    <div class="metric-unit">m³ (cum)</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Required Flow Rate</div>
+                    <div class="metric-value" id="dispReqDischarge">--</div>
+                    <div class="metric-unit" id="dispDischargeHeadroom">m³/hr required vs Q avail</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Operating Duration</div>
+                    <div class="metric-value" id="dispReqHrs">--</div>
+                    <div class="metric-unit">Cumulative Hours</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Power Consumption</div>
+                    <div class="metric-value" id="dispEnergyUnits">--</div>
+                    <div class="metric-unit" id="dispEnergyCost">₹0.00 Total</div>
+                </div>
+            </div>
+
+            <div id="recommendationText" class="recommendation-box">
+                Configure your multi-crop percentages and click "Run Multi-Crop Feasibility" to check hydraulic clearance.
+            </div>
+
+            <div class="section-title" style="margin-top: 20px;">Crop-Wise Allocated Water & Energy Breakdown</div>
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th>Crop</th>
+                        <th>Share (%)</th>
+                        <th>Area (Bigha)</th>
+                        <th>Gross Δ (")</th>
+                        <th>Water (m³)</th>
+                        <th>Pump Hrs</th>
+                        <th>Cost (₹)</th>
+                    </tr>
+                </thead>
+                <tbody id="breakdownBody">
+                    <tr><td colspan="7" style="text-align: center; color: #94a3b8;">No calculation run yet.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Standard Master Crop Database with Seasonal Grouping for Guided Checks
+    const MASTER_CROPS = [
+        { en: "Boro Rice", bn: "বোরো ধান", season: "summer", delta: 55, base: 120 },
+        { en: "Potato", bn: "আলু", season: "rabi", delta: 17, base: 100 },
+        { en: "Mustard", bn: "সরষে", season: "rabi", delta: 9, base: 105 },
+        { en: "Wheat", bn: "গম", season: "rabi", delta: 14, base: 120 },
+        { en: "Sesame (Til)", bn: "তিল", season: "summer", delta: 12, base: 90 },
+        { en: "Groundnut", bn: "চিনাবাদাম", season: "summer", delta: 20, base: 110 },
+        { en: "Sunflower", bn: "সূর্যমুখী", season: "summer", delta: 16, base: 100 },
+        { en: "Lentil", bn: "মসুর ডাল", season: "rabi", delta: 7, base: 110 },
+        { en: "Chickpea", bn: "ছোলা", season: "rabi", delta: 8, base: 115 },
+        { en: "Aman Rice", bn: "আমন ধান", season: "kharif", delta: 45, base: 135 },
+        { en: "Jute", bn: "পাট", season: "kharif", delta: 20, base: 120 },
+        { en: "Maize (Rabi)", bn: "ভুট্টা (রবি)", season: "rabi", delta: 18, base: 130 },
+        { en: "Green Gram (Mung)", bn: "মুগ ডাল", season: "summer", delta: 9, base: 75 },
+        { en: "Black Gram (Biuli)", bn: "বিউলি ডাল", season: "kharif", delta: 9, base: 80 },
+        { en: "Vegetables (Annual)", bn: "শাকসবজি", season: "perennial", delta: 20, base: 120 },
+        { en: "Sugarcane", bn: "আখ", season: "perennial", delta: 60, base: 330 }
+    ];
+
+    // Presets Definition
+    const PRESETS = {
+        rabi: [
+            { cropIdx: 1, pct: 40 }, // Potato
+            { cropIdx: 2, pct: 30 }, // Mustard
+            { cropIdx: 3, pct: 30 }  // Wheat
+        ],
+        summer_boro: [
+            { cropIdx: 0, pct: 50 }, // Boro Rice
+            { cropIdx: 4, pct: 30 }, // Sesame (Til)
+            { cropIdx: 5, pct: 20 }  // Groundnut
+        ],
+        summer_water_smart: [
+            { cropIdx: 4, pct: 40 }, // Sesame (Til)
+            { cropIdx: 5, pct: 35 }, // Groundnut
+            { cropIdx: 12, pct: 25 } // Green Gram (Mung)
+        ],
+        kharif: [
+            { cropIdx: 9, pct: 70 }, // Aman Rice
+            { cropIdx: 10, pct: 20 },// Jute
+            { cropIdx: 13, pct: 10 } // Black Gram
+        ]
+    };
+
+    let cropRows = [
+        { cropIdx: 1, pct: 40, delta: 17, base: 100 },
+        { cropIdx: 2, pct: 30, delta: 9,  base: 105 },
+        { cropIdx: 3, pct: 30, delta: 14, base: 120 }
+    ];
+
+    let multiCropAudit = null;
+
+    function loadPreset(presetKey) {
+        if (!PRESETS[presetKey]) return;
+        cropRows = PRESETS[presetKey].map(p => ({
+            cropIdx: p.cropIdx,
+            pct: p.pct,
+            delta: MASTER_CROPS[p.cropIdx].delta,
+            base: MASTER_CROPS[p.cropIdx].base
+        }));
+        renderCropRows();
+        evaluateMultiCropFeasibility();
+    }
+
+    function renderCropRows() {
+        const tbody = document.getElementById('cropPatternBody');
+        tbody.innerHTML = "";
+        let totalPct = 0;
+
+        cropRows.forEach((row, i) => {
+            totalPct += (parseFloat(row.pct) || 0);
+
+            let optionsHtml = MASTER_CROPS.map((c, idx) => 
+                `<option value="${idx}" ${idx === row.cropIdx ? "selected" : ""}>${c.en} (${c.bn})</option>`
+            ).join('');
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><select onchange="onCropSelectChange(${i}, this.value)">${optionsHtml}</select></td>
+                <td><input type="number" value="${row.pct}" min="1" max="100" step="1" oninput="onPctChange(${i}, this.value)"></td>
+                <td><input type="number" value="${row.delta}" min="1" step="0.5" oninput="onDeltaChange(${i}, this.value)"></td>
+                <td><input type="number" value="${row.base}" min="1" step="1" oninput="onBaseChange(${i}, this.value)"></td>
+                <td>${cropRows.length > 1 ? `<button type="button" class="btn-remove" onclick="removeCropRow(${i})">✕</button>` : ''}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        checkSeasonalAdvisory();
+        updatePctSummary();
+    }
+
+    function onCropSelectChange(idx, val) {
+        val = parseInt(val);
+        cropRows[idx].cropIdx = val;
+        cropRows[idx].delta = MASTER_CROPS[val].delta;
+        cropRows[idx].base = MASTER_CROPS[val].base;
+        renderCropRows();
+    }
+
+    function onPctChange(idx, val) {
+        cropRows[idx].pct = parseFloat(val) || 0;
+        updatePctSummary();
+    }
+
+    function onDeltaChange(idx, val) {
+        cropRows[idx].delta = parseFloat(val) || 0;
+    }
+
+    function onBaseChange(idx, val) {
+        cropRows[idx].base = parseFloat(val) || 1;
+    }
+
+    function addCropRow() {
+        cropRows.push({ cropIdx: 4, pct: 10, delta: 12, base: 90 });
+        renderCropRows();
+    }
+
+    function removeCropRow(idx) {
+        if (cropRows.length > 1) {
+            cropRows.splice(idx, 1);
+            renderCropRows();
+        }
+    }
+
+    function autoDistributeRemaining() {
+        let currentTotal = cropRows.reduce((sum, r) => sum + (parseFloat(r.pct) || 0), 0);
+        let diff = 100 - currentTotal;
+        if (diff !== 0 && cropRows.length > 0) {
+            let lastRow = cropRows[cropRows.length - 1];
+            lastRow.pct = Math.max(1, (parseFloat(lastRow.pct) || 0) + diff);
+            renderCropRows();
+        }
+    }
+
+    function equalizeShares() {
+        if (cropRows.length === 0) return;
+        let equalShare = Math.floor(100 / cropRows.length);
+        let remainder = 100 % cropRows.length;
+        cropRows.forEach((r, idx) => {
+            r.pct = equalShare + (idx === 0 ? remainder : 0);
+        });
+        renderCropRows();
+    }
+
+    function updatePctSummary() {
+        let sum = cropRows.reduce((acc, r) => acc + (parseFloat(r.pct) || 0), 0);
+        const tracker = document.getElementById('pctTracker');
+        const lbl = document.getElementById('lblTotalPct');
+
+        if (Math.abs(sum - 100) < 0.1) {
+            tracker.className = "pct-tracker pct-balanced";
+            lbl.innerText = "100% (Balanced)";
+        } else {
+            tracker.className = "pct-tracker pct-imbalanced";
+            lbl.innerText = `${sum.toFixed(1)}% (Must equal 100%)`;
+        }
+    }
+
+    function checkSeasonalAdvisory() {
+        const advBox = document.getElementById('seasonalAdvisory');
+        const seasons = new Set(cropRows.map(r => MASTER_CROPS[r.cropIdx].season));
+        
+        // Exclude perennial which overlaps all
+        seasons.delete("perennial");
+
+        if (seasons.has("kharif") && (seasons.has("summer") || seasons.has("rabi"))) {
+            advBox.className = "seasonal-advisory advisory-warn";
+            advBox.innerHTML = `⚠️ <strong>Seasonal Conflict Notice:</strong> You have combined Monsoon (Kharif) crops with Winter/Summer (Rabi/Boro) crops in the same concurrent share. If these crops are grown sequentially in different seasons, evaluate each seasonal rotation separately.`;
+        } else {
+            advBox.className = "seasonal-advisory";
+            advBox.style.display = "none";
+        }
+    }
+
+    function onSoilChange() {
+        document.getElementById('lossPercent').value = document.getElementById('soilSelect').value;
+    }
+
+    function evaluateMultiCropFeasibility() {
+        try {
+            const scheme = document.getElementById('schemeName').value || "MI Multi-Crop Audit";
+            const totalAreaQty = parseFloat(document.getElementById('totalAreaQty').value) || 0;
+            const areaUnitFactor = parseFloat(document.getElementById('areaUnit').value) || 1337.8;
+
+            const rawQ = parseFloat(document.getElementById('dischargeVal').value) || 0;
+            const qUnit = document.getElementById('dischargeUnit').value;
+            const maxDailyHrs = parseFloat(document.getElementById('maxDailyHrs').value) || 10;
+            const motorHP = parseFloat(document.getElementById('motorHP').value) || 0;
+            const tariff = parseFloat(document.getElementById('tariffRate').value) || 0;
+            const lossPct = parseFloat(document.getElementById('lossPercent').value) || 0;
+            const rainOffset = parseFloat(document.getElementById('rainOffset').value) || 0;
+            const soilEn = document.getElementById('soilSelect').options[document.getElementById('soilSelect').selectedIndex].getAttribute('data-en');
+
+            // Discharge conversion to m3/hr
+            let q_m3_hr = rawQ;
+            if (qUnit === "lps") q_m3_hr = rawQ * 3.6;
+            else if (qUnit === "cusec") q_m3_hr = rawQ * 101.94;
+
+            // Total Proposed Area
+            const proposedTotalSqm = totalAreaQty * areaUnitFactor;
+            const proposedTotalBigha = proposedTotalSqm / 1337.8;
+            const proposedTotalAcre = proposedTotalSqm / 4046.86;
+            const proposedTotalHa = proposedTotalSqm / 10000;
+
+            const effectiveLoss = Math.min(lossPct, 90);
+            const lossMultiplier = 1 / (1 - (effectiveLoss / 100));
+
+            let totalWaterReqM3 = 0;
+            let weightedDeltaM = 0;
+            let weightedBasePeriod = 0;
+            let sumFlowDemandFactor = 0;
+            let totalPumpHrsNeeded = 0;
+            let totalPctSum = 0;
+
+            let cropBreakdown = [];
+
+            cropRows.forEach(row => {
+                const cMeta = MASTER_CROPS[row.cropIdx];
+                const pct = parseFloat(row.pct) || 0;
+                totalPctSum += pct;
+                const frac = pct / 100;
+                
+                const cropAreaSqm = proposedTotalSqm * frac;
+                const cropAreaBigha = cropAreaSqm / 1337.8;
+
+                const deltaNetInch = Math.max(0, row.delta - rainOffset);
+                const deltaNetM = deltaNetInch * 0.0254;
+                const deltaGrossM = deltaNetM * lossMultiplier;
+                const deltaGrossInch = deltaGrossM * 39.3701;
+
+                const waterReqM3 = cropAreaSqm * deltaGrossM;
+                const pumpHrs = (q_m3_hr > 0) ? (waterReqM3 / q_m3_hr) : 0;
+                const energyKwh = (motorHP * 0.746) * pumpHrs;
+                const cost = energyKwh * tariff;
+
+                weightedDeltaM += (frac * deltaGrossM);
+                weightedBasePeriod += (frac * row.base);
+                sumFlowDemandFactor += (frac * deltaGrossM) / row.base;
+
+                totalWaterReqM3 += waterReqM3;
+                totalPumpHrsNeeded += pumpHrs;
+
+                cropBreakdown.push({
+                    name: cMeta.en,
+                    nameBn: cMeta.bn,
+                    pct,
+                    areaBigha: cropAreaBigha,
+                    areaSqm: cropAreaSqm,
+                    deltaGrossInch,
+                    deltaGrossM,
+                    base: row.base,
+                    waterReqM3,
+                    pumpHrs,
+                    energyKwh,
+                    cost
+                });
+            });
+
+            const reqDischargeM3Hr = (maxDailyHrs > 0) ? (proposedTotalSqm * (sumFlowDemandFactor / maxDailyHrs)) : 0;
+
+            // Maximum Sizing Capacity
+            const maxAreaSqmPossible = (sumFlowDemandFactor > 0) ? ((q_m3_hr * maxDailyHrs) / sumFlowDemandFactor) : 0;
+            const maxAreaBighaPossible = maxAreaSqmPossible / 1337.8;
+            const maxAreaAcrePossible = maxAreaSqmPossible / 4046.86;
+            const maxAreaHaPossible = maxAreaSqmPossible / 10000;
+
+            // Composite Duty
+            const compDutyHaCumec = (weightedDeltaM > 0) ? ((8.64 * weightedBasePeriod) / weightedDeltaM) : 0;
+            const compDutyBighaCusec = compDutyHaCumec * (10000 / 1337.8) / 35.3147;
+
+            const totalEnergyKwh = (motorHP * 0.746) * totalPumpHrsNeeded;
+            const totalEnergyCost = totalEnergyKwh * tariff;
+
+            const isFeasible = (reqDischargeM3Hr <= q_m3_hr);
+
+            multiCropAudit = {
+                scheme, soilEn, lossPct, rainOffset, rawQ, qUnit, q_m3_hr, maxDailyHrs, motorHP, tariff,
+                proposedTotalSqm, proposedTotalBigha, proposedTotalAcre, proposedTotalHa,
+                maxAreaSqmPossible, maxAreaBighaPossible, maxAreaAcrePossible, maxAreaHaPossible,
+                weightedDeltaM, weightedBasePeriod, compDutyHaCumec, compDutyBighaCusec,
+                totalWaterReqM3, reqDischargeM3Hr, totalPumpHrsNeeded, totalEnergyKwh, totalEnergyCost,
+                isFeasible, cropBreakdown, totalPctSum
+            };
+
+            renderMultiCropOutputs();
+        } catch (err) {
+            console.error("Multi-crop calculation error:", err);
+            alert("Feasibility evaluation error: " + err.message);
+        }
+    }
+
+    function renderMultiCropOutputs() {
+        if (!multiCropAudit) return;
+        const d = multiCropAudit;
+
+        const badge = document.getElementById('statusBadge');
+        const recBox = document.getElementById('recommendationText');
+        const tbody = document.getElementById('breakdownBody');
+
+        if (d.isFeasible) {
+            badge.className = "status-badge badge-success";
+            badge.innerText = "PROPOSAL FEASIBLE: DISCHARGE SATISFIES MULTI-CROP DEMAND";
+            
+            const spareBigha = d.maxAreaBighaPossible - d.proposedTotalBigha;
+            const headroomPct = (d.maxAreaBighaPossible > 0) ? ((spareBigha / d.maxAreaBighaPossible) * 100).toFixed(1) : "0";
+            
+            recBox.innerHTML = `<strong>Multi-Crop Hydraulic Clearance Verified:</strong><br>
+            The installation supports the proposed multi-crop command of <strong>${d.proposedTotalBigha.toFixed(2)} Bigha</strong>. 
+            The required average operational discharge is <strong>${d.reqDischargeM3Hr.toFixed(2)} m³/hr</strong>, safely within the delivery rate of <strong>${d.q_m3_hr.toFixed(2)} m³/hr</strong> (${(d.q_m3_hr - d.reqDischargeM3Hr).toFixed(2)} m³/hr reserve margin).<br>
+            - <strong>Maximum Potential Command:</strong> Under this specific cropping pattern (${d.cropBreakdown.map(c=>`${c.name} ${c.pct}%`).join(', ')}), the installation can command up to <strong>${d.maxAreaBighaPossible.toFixed(2)} Bigha</strong> (${d.maxAreaAcrePossible.toFixed(2)} Acre / ${d.maxAreaHaPossible.toFixed(2)} Ha) with ${d.maxDailyHrs} hrs/day pumping.<br>
+            - <strong>Headroom:</strong> There is a <strong>${spareBigha.toFixed(2)} Bigha (${headroomPct}%)</strong> expansion reserve.`;
+        } else {
+            badge.className = "status-badge badge-danger";
+            badge.innerText = "CAPACITY DEFICIT: INSUFFICIENT DISCHARGE FOR PATTERN";
+            
+            const excessFlow = d.reqDischargeM3Hr - d.q_m3_hr;
+            const overloadHours = (d.reqDischargeM3Hr / d.q_m3_hr) * d.maxDailyHrs;
+            
+            recBox.innerHTML = `<strong>Hydraulic Bottleneck Identified:</strong><br>
+            The proposed command of <strong>${d.proposedTotalBigha.toFixed(2)} Bigha</strong> requires a delivery rate of <strong>${d.reqDischargeM3Hr.toFixed(2)} m³/hr</strong> at ${d.maxDailyHrs} hrs/day operation, but the installation delivers only <strong>${d.q_m3_hr.toFixed(2)} m³/hr</strong> (Deficit: -${excessFlow.toFixed(2)} m³/hr).<br>
+            - <strong>Pump Overload Risk:</strong> The prime mover would have to operate <strong>${overloadHours.toFixed(1)} hrs/day</strong> to sustain this crop pattern, causing severe thermal and mechanical fatigue.<br>
+            - <strong>Prescribed Action:</strong> Either downscale the total command area to a maximum of <strong>${d.maxAreaBighaPossible.toFixed(2)} Bigha</strong> (${d.maxAreaAcrePossible.toFixed(2)} Acre), or reduce the share of high-delta crops (such as Boro Rice) in favor of low-duty pulses/oilseeds (e.g., Mustard or Lentil).`;
+        }
+
+        document.getElementById('dispProposedBigha').innerText = `${d.proposedTotalBigha.toFixed(2)} Bigha`;
+        document.getElementById('dispProposedAlt').innerText = `${d.proposedTotalAcre.toFixed(2)} Acre | ${d.proposedTotalHa.toFixed(2)} Ha`;
+        
+        document.getElementById('dispMaxBigha').innerText = `${d.maxAreaBighaPossible.toFixed(2)} Bigha`;
+        document.getElementById('dispMaxAlt').innerText = `${d.maxAreaAcrePossible.toFixed(2)} Acre | ${d.maxAreaHaPossible.toFixed(2)} Ha`;
+
+        document.getElementById('dispCompDelta').innerText = `${(d.weightedDeltaM * 39.3701).toFixed(2)}"`;
+        document.getElementById('dispDutyBigha').innerText = `${d.compDutyBighaCusec.toFixed(1)}`;
+
+        document.getElementById('dispReqWater').innerText = Math.round(d.totalWaterReqM3).toLocaleString('en-IN');
+        document.getElementById('dispReqDischarge').innerText = `${d.reqDischargeM3Hr.toFixed(1)} m³/hr`;
+        document.getElementById('dispDischargeHeadroom').innerText = `Available Q: ${d.q_m3_hr.toFixed(1)} m³/hr`;
+
+        document.getElementById('dispReqHrs').innerText = `${d.totalPumpHrsNeeded.toFixed(1)} Hrs`;
+        document.getElementById('dispEnergyUnits').innerText = `${Math.round(d.totalEnergyKwh).toLocaleString('en-IN')} kWh`;
+        document.getElementById('dispEnergyCost').innerText = `₹${d.totalEnergyCost.toLocaleString('en-IN', {maximumFractionDigits: 2})}`;
+
+        tbody.innerHTML = "";
+        d.cropBreakdown.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${item.name}</strong> <span style="color:#64748b;">(${item.nameBn})</span></td>
+                <td>${item.pct}%</td>
+                <td>${item.areaBigha.toFixed(2)}</td>
+                <td>${item.deltaGrossInch.toFixed(1)}"</td>
+                <td>${Math.round(item.waterReqM3).toLocaleString('en-IN')}</td>
+                <td>${item.pumpHrs.toFixed(1)}</td>
+                <td>₹${item.cost.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        const trTotal = document.createElement('tr');
+        trTotal.style.background = "#f1f5f9";
+        trTotal.style.fontWeight = "700";
+        trTotal.innerHTML = `
+            <td>TOTAL / COMPOSITE</td>
+            <td>${d.totalPctSum.toFixed(0)}%</td>
+            <td>${d.proposedTotalBigha.toFixed(2)}</td>
+            <td>${(d.weightedDeltaM * 39.3701).toFixed(1)}"</td>
+            <td>${Math.round(d.totalWaterReqM3).toLocaleString('en-IN')}</td>
+            <td>${d.totalPumpHrsNeeded.toFixed(1)}</td>
+            <td>₹${d.totalEnergyCost.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+        `;
+        tbody.appendChild(trTotal);
+    }
+
+    function exportMultiCropPDF() {
+        if (!multiCropAudit) evaluateMultiCropFeasibility();
+        const d = multiCropAudit;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const dateStr = new Date().toLocaleDateString('en-GB');
+
+        // Header Section
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(15);
+        doc.setTextColor(30, 58, 138);
+        doc.text("MULTI-CROP IRRIGATION FEASIBILITY & COMMAND AUDIT", 20, 18);
+
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(100);
+        doc.text(`Technical Authority: Dayamoy Ghosh, Executive Engineer | Generated: ${dateStr}`, 20, 24);
+        doc.text(`Scheme ID / Name: ${d.scheme}`, 20, 29);
+        doc.setDrawColor(200);
+        doc.line(20, 32, 190, 32);
+
+        // Status Banner
+        if (d.isFeasible) {
+            doc.setFillColor(209, 250, 229);
+            doc.rect(20, 35, 170, 9, 'F');
+            doc.setTextColor(6, 95, 70);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.text("STATUS: FEASIBLE - INSTALLATION DISCHARGE FULLY SUPPORTS PATTERN", 25, 41);
+        } else {
+            doc.setFillColor(254, 226, 226);
+            doc.rect(20, 35, 170, 9, 'F');
+            doc.setTextColor(153, 27, 27);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(10);
+            doc.text("STATUS: DEFICIENT - DEMAND EXCEEDS INSTALLATION DISCHARGE LIMIT", 25, 41);
+        }
+
+        // Section 1: Command Area & Hydraulic Clearance
+        doc.setTextColor(30);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("1. COMPOSITE COMMAND AREA & HYDRAULIC SIZING", 20, 52);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        let y = 59;
+        doc.text(`Proposed Multi-Crop Command: ${d.proposedTotalBigha.toFixed(2)} Bigha (${d.proposedTotalAcre.toFixed(2)} Acre / ${d.proposedTotalHa.toFixed(2)} Ha)`, 25, y);
+        doc.text(`Max Irrigable Command Limit: ${d.maxAreaBighaPossible.toFixed(2)} Bigha (${d.maxAreaAcrePossible.toFixed(2)} Acre)`, 110, y);
+        
+        y += 7;
+        doc.text(`Required Seasonal Flow Rate: ${d.reqDischargeM3Hr.toFixed(2)} m3/hr`, 25, y);
+        doc.text(`Available Installation Discharge (Q): ${d.q_m3_hr.toFixed(2)} m3/hr (${d.rawQ} ${d.qUnit})`, 110, y);
+
+        y += 7;
+        doc.text(`Composite Gross Delta: ${(d.weightedDeltaM * 39.3701).toFixed(2)} inches (${d.weightedDeltaM.toFixed(3)} m)`, 25, y);
+        doc.text(`Composite Duty: ${d.compDutyBighaCusec.toFixed(1)} Bigha/cusec (${d.compDutyHaCumec.toFixed(0)} Ha/cumec)`, 110, y);
+
+        y += 7;
+        doc.text(`Gross Volumetric Demand: ${Math.round(d.totalWaterReqM3).toLocaleString('en-IN')} m3`, 25, y);
+        doc.text(`Design Operating Ceiling: ${d.maxDailyHrs} hrs/day`, 110, y);
+
+        // Section 2: Cropping Pattern Breakdown Table
+        y += 12;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text("2. CROPPING PATTERN ALLOCATION & BREAKDOWN", 20, y);
+
+        y += 6;
+        doc.setFillColor(241, 245, 249);
+        doc.rect(20, y, 170, 7, 'F');
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "bold");
+        doc.text("Crop", 24, y + 5);
+        doc.text("Share %", 65, y + 5);
+        doc.text("Area (Bigha)", 85, y + 5);
+        doc.text("Gross Delta", 115, y + 5);
+        doc.text("Water (m3)", 140, y + 5);
+        doc.text("Cost (Rs)", 170, y + 5);
+
+        y += 7;
+        doc.setFont("helvetica", "normal");
+        d.cropBreakdown.forEach((item) => {
+            y += 6;
+            doc.text(`${item.name}`, 24, y);
+            doc.text(`${item.pct}%`, 67, y);
+            doc.text(`${item.areaBigha.toFixed(2)}`, 88, y);
+            doc.text(`${item.deltaGrossInch.toFixed(1)}"`, 118, y);
+            doc.text(`${Math.round(item.waterReqM3).toLocaleString('en-IN')}`, 140, y);
+            doc.text(`${Math.round(item.cost).toLocaleString('en-IN')}`, 170, y);
+        });
+
+        // Section 3: Energy & Electro-Mechanical Load
+        y += 12;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text("3. ELECTRO-MECHANICAL & ENERGY CONSUMPTION", 20, y);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        y += 7;
+        doc.text(`Prime Mover Rating: ${d.motorHP} HP (${(d.motorHP * 0.746).toFixed(2)} kW)`, 25, y);
+        doc.text(`Total Operating Hours: ${d.totalPumpHrsNeeded.toFixed(1)} hrs`, 110, y);
+
+        y += 7;
+        doc.text(`Total Energy Consumed: ${Math.round(d.totalEnergyKwh).toLocaleString('en-IN')} kWh (Units)`, 25, y);
+        doc.text(`Electricity Rate: Rs. ${d.tariff.toFixed(2)} / Unit`, 110, y);
+
+        y += 7;
+        doc.setFont("helvetica", "bold");
+        doc.text(`GRAND TOTAL COST: Rs. ${d.totalEnergyCost.toLocaleString('en-IN', {minimumFractionDigits: 2})}`, 25, y);
+        doc.text(`Composite Energy Cost / Bigha: Rs. ${(d.totalEnergyCost / d.proposedTotalBigha).toFixed(2)} / Bigha`, 110, y);
+
+        // Technical Recommendation Box
+        y += 13;
+        doc.setFillColor(245, 247, 250);
+        doc.rect(20, y, 170, 32, 'F');
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(30, 58, 138);
+        doc.text("EXECUTIVE INFERENCE & HYDRAULIC CLEARANCE:", 24, y + 7);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(30);
+
+        let r1 = "", r2 = "", r3 = "";
+        if (d.isFeasible) {
+            r1 = `The installation satisfactorily commands the multi-crop area of ${d.proposedTotalBigha.toFixed(2)} Bigha.`;
+            r2 = `Required flow rate of ${d.reqDischargeM3Hr.toFixed(2)} m3/hr is comfortably within the discharge capacity of ${d.q_m3_hr.toFixed(2)} m3/hr.`;
+            r3 = `Maximum feasible multi-crop command area under this pattern is ${d.maxAreaBighaPossible.toFixed(2)} Bigha (Headroom: ${(d.maxAreaBighaPossible - d.proposedTotalBigha).toFixed(2)} Bigha).`;
+        } else {
+            r1 = `CAPACITY BOTTLENECK: Scheme discharge of ${d.q_m3_hr.toFixed(2)} m3/hr cannot sustain ${d.proposedTotalBigha.toFixed(2)} Bigha under this pattern.`;
+            r2 = `Average required delivery is ${d.reqDischargeM3Hr.toFixed(2)} m3/hr (Shortfall: ${(d.reqDischargeM3Hr - d.q_m3_hr).toFixed(2)} m3/hr).`;
+            r3 = `Action: Cap command area at ${d.maxAreaBighaPossible.toFixed(2)} Bigha, or increase pulses/oilseeds share over Boro Rice.`;
+        }
+
+        doc.text(r1, 24, y + 14);
+        doc.text(r2, 24, y + 20);
+        doc.text(r3, 24, y + 26);
+
+        // Footer
+        doc.setFontSize(8);
+        doc.setTextColor(140);
+        doc.text("Standard Applied: West Bengal Minor Irrigation Rules | 1 Bigha = 1337.8 sqm | Weighted Multi-Crop Sizing", 20, 285);
+
+        doc.save(`${d.scheme.replace(/\s+/g, '_')}_MultiCrop_Audit.pdf`);
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        renderCropRows();
+        document.getElementById('btnAddCropRow').addEventListener('click', addCropRow);
+        document.getElementById('soilSelect').addEventListener('change', onSoilChange);
+        document.getElementById('btnCalculate').addEventListener('click', evaluateMultiCropFeasibility);
+        document.getElementById('btnExport').addEventListener('click', exportMultiCropPDF);
+
+        evaluateMultiCropFeasibility();
+    });
+</script>
+</body>
+</html>

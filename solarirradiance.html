@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Solar MI Survey — GIS Map & Irradiance (W/m²) Tool</title>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- PapaParse for robust CSV parsing -->
+  <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    :root {
+      --primary: #1e3a4c;
+      --secondary: #2e5a73;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --border: #cbd5e1;
+      --text: #0f172a;
+      --muted: #475569;
+      --accent: #0d9488;
+    }
+    * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body {
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      background: var(--card);
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.09);
+      overflow: hidden;
+    }
+    header {
+      background: var(--primary);
+      color: #fff;
+      padding: 14px 22px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    header h1 { margin: 0; font-size: 1.2rem; }
+    header p { margin: 3px 0 0; font-size: 0.82rem; color: #cbd5e1; }
+    .badge-hint {
+      background: rgba(255,255,255,0.12);
+      padding: 6px 12px;
+      border-radius: 5px;
+      font-size: 0.78rem;
+      color: #e2e8f0;
+    }
+
+    /* Controls Bar */
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      padding: 14px 22px;
+      background: #e6eef2;
+      border-bottom: 1px solid var(--border);
+      align-items: end;
+    }
+    .field label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+    .field input {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      font-size: 0.88rem;
+      background: #fff;
+    }
+    .field input.input-error {
+      border: 2px solid #dc2626;
+      background: #fef2f2;
+    }
+    .field input[readonly] {
+      background: #f8fafc;
+      font-weight: 600;
+      color: #0f766e;
+    }
+
+    /* Caution Banner */
+    .caution-banner {
+      display: none;
+      background: #fef2f2;
+      color: #991b1b;
+      border-bottom: 1px solid #fecaca;
+      padding: 10px 22px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      align-items: center;
+      gap: 8px;
+    }
+    .info-banner {
+      display: none;
+      background: #fffbeb;
+      color: #92400e;
+      border-bottom: 1px solid #fde68a;
+      padding: 8px 22px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Action & Overlay Toolbar */
+    .toolbar {
+      padding: 12px 22px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      background: #f8fafc;
+    }
+    button, .file-btn {
+      padding: 8px 13px;
+      border: none;
+      border-radius: 5px;
+      font-size: 0.83rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: opacity 0.15s;
+    }
+    button:hover, .file-btn:hover { opacity: 0.9; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-locate { background: #2563eb; color: #fff; }
+    .btn-copy { background: var(--accent); color: #fff; }
+    .btn-ghi { background: #0284c7; color: #fff; }
+    .btn-csv { background: #475569; color: #fff; }
+    .file-btn { background: #7c3aed; color: #fff; }
+    .btn-clear { background: #dc2626; color: #fff; padding: 8px 10px; }
+    #overlayInput { display: none; }
+    .status {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-left: auto;
+      font-weight: 500;
+    }
+
+    /* Main Split Layout */
+    .workspace {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      min-height: 560px;
+    }
+    @media (max-width: 960px) {
+      .workspace { grid-template-columns: 1fr; }
+    }
+    .map-pane {
+      position: relative;
+      border-right: 1px solid var(--border);
+      min-height: 520px;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      min-height: 520px;
+    }
+    .map-legend {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      z-index: 1000;
+      background: rgba(255,255,255,0.94);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.2);
+      line-height: 1.5;
+      color: #1e293b;
+    }
+
+    .data-pane {
+      padding: 14px 18px;
+      overflow-x: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .summary-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .kpi {
+      background: #fff8e7;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .kpi .kpi-lbl { font-size: 0.7rem; color: var(--muted); font-weight: 600; }
+    .kpi .kpi-val { font-size: 1.02rem; font-weight: 700; color: var(--primary); margin-top: 2px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    th {
+      background: var(--secondary);
+      color: #fff;
+      text-align: center;
+      padding: 7px 6px;
+      font-weight: 600;
+    }
+    td {
+      border-bottom: 1px solid #e2e8f0;
+      padding: 5px 6px;
+      text-align: center;
+    }
+    tr:nth-child(even) { background: #f8fafc; }
+    tr.future-slot {
+      background: #f1f5f9 !important;
+      color: #94a3b8;
+      font-style: italic;
+    }
+    .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .note {
+      font-size: 0.74rem;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    .popup-btn {
+      display: inline-block;
+      margin-top: 6px;
+      margin-right: 4px;
+      padding: 5px 9px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      border-radius: 4px;
+      text-decoration: none;
+      color: #fff !important;
+      background: var(--primary);
+      cursor: pointer;
+      border: none;
+    }
+    .popup-btn.sv { background: #ea580c; }
+    .popup-table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 0.76rem; }
+    .popup-table td { text-align: left; padding: 2px 4px; border-bottom: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Solar MI Survey — GIS Map &amp; Irradiance (W/m²) Lookup Tool</h1>
+        <p>Click map or type Lat/Long to capture scheme location • Right-click any point for Altitude &amp; Google Street View</p>
+      </div>
+      <div class="badge-hint">
+        <b>Left-Click:</b> Set Target Point &nbsp;|&nbsp; <b>Right-Click:</b> Altitude &amp; Street View
+      </div>
+    </header>
+
+    <div class="controls">
+      <div class="field">
+        <label for="lat">Latitude (°N)</label>
+        <input type="number" id="lat" step="0.00001" value="23.31425" onkeydown="if(event.key==='Enter') goToTypedCoords()" />
+      </div>
+      <div class="field">
+        <label for="lon">Longitude (°E)</label>
+        <input type="number" id="lon" step="0.00001" value="86.98210" onkeydown="if(event.key==='Enter') goToTypedCoords()" />
+      </div>
+      <div class="field">
+        <label for="altitude">Ground Altitude (m ASL)</label>
+        <input type="text" id="altitude" readonly value="—" />
+      </div>
+      <div class="field">
+        <label for="date">Survey Date (Past / Today Only)</label>
+        <input type="date" id="date" onchange="validateSurveyDate()" />
+      </div>
+      <div class="field">
+        <label for="tilt">Panel Tilt (°)</label>
+        <input type="number" id="tilt" step="1" min="0" max="90" value="23" />
+      </div>
+    </div>
+
+    <!-- Future Date Caution Banner -->
+    <div class="caution-banner" id="cautionBanner">
+      <span>⚠️ Caution:</span>
+      <span id="cautionText">Future/advanced survey dates are not permitted.</span>
+    </div>
+
+    <!-- Today's Cutoff Notice Banner -->
+    <div class="info-banner" id="todayInfoBanner">
+      <span>ℹ️ Today's Survey Cutoff:</span>
+      <span id="todayInfoText"></span>
+    </div>
+
+    <div class="toolbar">
+      <button class="btn-locate" onclick="goToTypedCoords()">Locate Typed Lat/Long</button>
+      <button class="btn-primary" onclick="fetchIrradiance()">Fetch Irradiance (W/m²)</button>
+      <button class="btn-copy" onclick="copyTiltedColumn()">Copy Tilted W/m² (Col 3)</button>
+      <button class="btn-ghi" onclick="copyGHIColumn()">Copy GHI W/m²</button>
+      <button class="btn-csv" onclick="downloadCSV()">Download CSV</button>
+
+      <label for="overlayInput" class="file-btn">Overlay CSV / GeoJSON</label>
+      <input type="file" id="overlayInput" accept=".csv,.geojson,.json" onchange="handleOverlayUpload(event)" />
+      <button class="btn-clear" id="clearOverlayBtn" style="display:none;" onclick="clearOverlay()">Clear Overlay</button>
+
+      <span class="status" id="status">Ready</span>
+    </div>
+
+    <div class="workspace">
+      <div class="map-pane">
+        <div id="map"></div>
+        <div class="map-legend">
+          <b>Map Controls:</b><br>
+          • <b>Left-click</b> map or drag pin to update Lat/Long &amp; Altitude<br>
+          • <b>Right-click</b> anywhere for Altitude &amp; Google Street View<br>
+          • Upload <b>CSV</b> (with Lat/Lon columns) or <b>GeoJSON</b> to plot schemes
+        </div>
+      </div>
+
+      <div class="data-pane">
+        <div class="summary-bar" id="summaryBar" style="display:none;">
+          <div class="kpi">
+            <div class="kpi-lbl">Peak Tilted (Elapsed)</div>
+            <div class="kpi-val" id="kpiPeakTilted">—</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-lbl">Mean Tilted (Elapsed)</div>
+            <div class="kpi-val" id="kpiMeanTilted">—</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-lbl">Elapsed Insolation</div>
+            <div class="kpi-val" id="kpiInsolation">—</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-lbl">Data Type</div>
+            <div class="kpi-val" id="kpiSource" style="font-size:0.8rem;">—</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Excel Row</th>
+              <th>Time (IST)</th>
+              <th>Suggested Sky</th>
+              <th>Tilted W/m²<br><small>(Col 3)</small></th>
+              <th>GHI W/m²</th>
+              <th>DNI W/m²</th>
+            </tr>
+          </thead>
+          <tbody id="resultBody">
+            <tr>
+              <td colspan="6" style="color:#64748b; padding:24px;">
+                Select a point on the Google Hybrid map (or enter Lat/Long), choose a valid Survey Date, and click <b>Fetch Irradiance (W/m²)</b>.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="note">
+          * 30-minute rows (:30) are linearly interpolated from hourly Open-Meteo observed/reanalysis data so they paste directly into Rows 19–36 of <code>Field_Survey_Form</code>. Future hours on today's date are automatically excluded.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function getLocalDateStr(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    // 1. Initialize date picker
+    (function initDate() {
+      const today = new Date();
+      const todayStr = getLocalDateStr(today);
+
+      const defaultDate = new Date();
+      defaultDate.setDate(today.getDate() - 7);
+
+      const dateInput = document.getElementById('date');
+      dateInput.max = todayStr;
+      dateInput.value = getLocalDateStr(defaultDate);
+    })();
+
+    function validateSurveyDate(showPopupAlert = false) {
+      const dateInput = document.getElementById('date');
+      const banner = document.getElementById('cautionBanner');
+      const cautionText = document.getElementById('cautionText');
+      const statusEl = document.getElementById('status');
+
+      const todayStr = getLocalDateStr(new Date());
+      const selectedStr = dateInput.value;
+
+      if (!selectedStr) {
+        dateInput.classList.add('input-error');
+        cautionText.textContent = "Please select a valid Survey Date.";
+        banner.style.display = "flex";
+        return false;
+      }
+
+      if (selectedStr > todayStr) {
+        dateInput.classList.add('input-error');
+        const msg = `Selected date (${selectedStr}) is an advanced/future date. Open-Meteo only has weather forecasts for future dates—not actual observed irradiance. Please select today (${todayStr}) or a past survey date.`;
+        cautionText.textContent = msg;
+        banner.style.display = "flex";
+        statusEl.textContent = "Blocked: Future date selected.";
+        if (showPopupAlert) {
+          alert("⚠️ CAUTION: " + msg);
+        }
+        return false;
+      }
+
+      dateInput.classList.remove('input-error');
+      banner.style.display = "none";
+      return true;
+    }
+
+    // 2. Initialize Leaflet Map with Google Hybrid Layer
+    const initLat = 23.31425;
+    const initLon = 86.98210;
+
+    const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+      maxZoom: 21,
+      subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+      attribution: 'Map data &copy; Google'
+    });
+
+    const googleSat = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+      maxZoom: 21,
+      attribution: 'Imagery &copy; Google'
+    });
+
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    });
+
+    const map = L.map('map', {
+      center: [initLat, initLon],
+      zoom: 15,
+      layers: [googleHybrid]
+    });
+
+    L.control.layers({
+      "Google Hybrid": googleHybrid,
+      "Google Satellite": googleSat,
+      "OpenStreetMap": osmLayer
+    }).addTo(map);
+
+    let targetMarker = L.marker([initLat, initLon], { draggable: true }).addTo(map);
+    let overlayLayerGroup = L.featureGroup().addTo(map);
+    let currentRows = [];
+
+    function getStreetViewUrl(lat, lon) {
+      return `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat.toFixed(6)},${lon.toFixed(6)}`;
+    }
+
+    async function fetchElevation(lat, lon) {
+      try {
+        const resp = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lat}&longitude=${lon}`);
+        const data = await resp.json();
+        if (data && Array.isArray(data.elevation) && data.elevation.length > 0) {
+          return Math.round(data.elevation[0] * 10) / 10;
+        }
+      } catch (e) {
+        console.warn("Elevation lookup failed:", e);
+      }
+      return null;
+    }
+
+    async function setTargetLocation(lat, lon, panMap = false) {
+      const latFixed = Number(lat.toFixed(5));
+      const lonFixed = Number(lon.toFixed(5));
+
+      document.getElementById('lat').value = latFixed;
+      document.getElementById('lon').value = lonFixed;
+      document.getElementById('altitude').value = "Loading...";
+
+      targetMarker.setLatLng([latFixed, lonFixed]);
+      if (panMap) {
+        map.setView([latFixed, lonFixed], Math.max(map.getZoom(), 16));
+      }
+
+      const elev = await fetchElevation(latFixed, lonFixed);
+      const elevStr = elev !== null ? `${elev} m` : "N/A";
+      document.getElementById('altitude').value = elevStr;
+
+      const svUrl = getStreetViewUrl(latFixed, lonFixed);
+      targetMarker.bindPopup(`
+        <b>Selected Survey Point</b><br>
+        Lat: <b>${latFixed}</b>, Lon: <b>${lonFixed}</b><br>
+        Altitude: <b>${elevStr}</b><br>
+        <a class="popup-btn sv" href="${svUrl}" target="_blank" rel="noopener">Open Street View</a>
+      `).openPopup();
+
+      document.getElementById('status').textContent = `Target updated: ${latFixed}, ${lonFixed} (Alt: ${elevStr})`;
+    }
+
+    setTargetLocation(initLat, initLon, false);
+
+    map.on('click', function(e) {
+      setTargetLocation(e.latlng.lat, e.latlng.lng, false);
+    });
+
+    targetMarker.on('dragend', function(e) {
+      const pos = e.target.getLatLng();
+      setTargetLocation(pos.lat, pos.lng, false);
+    });
+
+    function goToTypedCoords() {
+      const lat = parseFloat(document.getElementById('lat').value);
+      const lon = parseFloat(document.getElementById('lon').value);
+      if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        alert("Please enter valid Latitude (-90 to 90) and Longitude (-180 to 180).");
+        return;
+      }
+      setTargetLocation(lat, lon, true);
+    }
+
+    map.on('contextmenu', async function(e) {
+      const rLat = Number(e.latlng.lat.toFixed(6));
+      const rLon = Number(e.latlng.lng.toFixed(6));
+      const svUrl = getStreetViewUrl(rLat, rLon);
+
+      L.popup()
+        .setLatLng(e.latlng)
+        .setContent(`
+          <b>Point Inspector</b><br>
+          Lat: <b>${rLat}</b>, Lon: <b>${rLon}</b><br>
+          Altitude: <span id="ctxElev">Fetching...</span><br>
+          <button class="popup-btn" onclick="selectFromContext(${rLat}, ${rLon})">Use for Irradiance</button>
+          <a class="popup-btn sv" href="${svUrl}" target="_blank" rel="noopener">Google Street View</a>
+        `)
+        .openOn(map);
+
+      const elev = await fetchElevation(rLat, rLon);
+      const elSpan = document.getElementById('ctxElev');
+      if (elSpan) {
+        elSpan.innerHTML = elev !== null ? `<b>${elev} m ASL</b>` : "Unavailable";
+      }
+    });
+
+    window.selectFromContext = function(lat, lon) {
+      map.closePopup();
+      setTargetLocation(lat, lon, false);
+    };
+
+    // 3. CSV & GeoJSON Overlay Handler
+    function handleOverlayUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const fileName = file.name.toLowerCase();
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        const content = e.target.result;
+        overlayLayerGroup.clearLayers();
+
+        if (fileName.endsWith('.geojson') || fileName.endsWith('.json')) {
+          try {
+            const geojson = JSON.parse(content);
+            plotGeoJSON(geojson);
+          } catch (err) {
+            alert("Invalid GeoJSON file: " + err.message);
+          }
+        } else if (fileName.endsWith('.csv')) {
+          Papa.parse(content, {
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+              plotCSV(results.data);
+            },
+            error: function(err) {
+              alert("CSV parsing error: " + err.message);
+            }
+          });
+        } else {
+          alert("Please upload a .csv, .geojson, or .json file.");
+        }
+      };
+
+      reader.readAsText(file);
+      event.target.value = "";
+    }
+
+    function buildFeaturePopupHtml(props, lat, lon) {
+      let rowsHtml = "";
+      const entries = Object.entries(props || {}).slice(0, 8);
+      entries.forEach(([k, v]) => {
+        if (v !== null && v !== undefined && String(v).trim() !== "") {
+          rowsHtml += `<tr><td><b>${k}</b></td><td>${v}</td></tr>`;
+        }
+      });
+      const svUrl = getStreetViewUrl(lat, lon);
+      return `
+        <div style="min-width:190px;">
+          <b>Installation Point</b> (${lat.toFixed(5)}, ${lon.toFixed(5)})
+          <table class="popup-table">${rowsHtml}</table>
+          <button class="popup-btn" onclick="selectFromContext(${lat}, ${lon})">Select for Irradiance</button>
+          <a class="popup-btn sv" href="${svUrl}" target="_blank" rel="noopener">Street View</a>
+        </div>
+      `;
+    }
+
+    function plotCSV(rows) {
+      if (!rows || !rows.length) {
+        alert("No data rows found in CSV.");
+        return;
+      }
+
+      const headers = Object.keys(rows[0]);
+      const latKey = headers.find(h => /^(lat|latitude|y|coord_y)$/i.test(h.trim()));
+      const lonKey = headers.find(h => /^(lon|lng|long|longitude|x|coord_x)$/i.test(h.trim()));
+
+      if (!latKey || !lonKey) {
+        alert(`Could not auto-detect Latitude/Longitude columns.\nFound headers: ${headers.join(", ")}\nPlease name columns 'Latitude' and 'Longitude' (or 'Lat' and 'Lon').`);
+        return;
+      }
+
+      let count = 0;
+      rows.forEach(row => {
+        const lat = parseFloat(row[latKey]);
+        const lon = parseFloat(row[lonKey]);
+        if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+          const marker = L.circleMarker([lat, lon], {
+            radius: 7,
+            fillColor: "#f59e0b",
+            color: "#78350f",
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9
+          });
+          marker.bindPopup(buildFeaturePopupHtml(row, lat, lon));
+          overlayLayerGroup.addLayer(marker);
+          count++;
+        }
+      });
+
+      if (count > 0) {
+        map.fitBounds(overlayLayerGroup.getBounds(), { padding: [30, 30] });
+        document.getElementById('clearOverlayBtn').style.display = "inline-flex";
+        document.getElementById('status').textContent = `Plotted ${count} installation points from CSV.`;
+      } else {
+        alert("No valid numeric coordinates found in the CSV.");
+      }
+    }
+
+    function plotGeoJSON(geojson) {
+      let count = 0;
+      const gjLayer = L.geoJSON(geojson, {
+        pointToLayer: function(feature, latlng) {
+          count++;
+          return L.circleMarker(latlng, {
+            radius: 7,
+            fillColor: "#10b981",
+            color: "#064e3b",
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9
+          });
+        },
+        style: function() {
+          return { color: "#10b981", weight: 2, fillOpacity: 0.2 };
+        },
+        onEachFeature: function(feature, layer) {
+          let lat = initLat, lon = initLon;
+          if (feature.geometry && feature.geometry.type === "Point") {
+            lon = feature.geometry.coordinates[0];
+            lat = feature.geometry.coordinates[1];
+          } else if (layer.getBounds) {
+            const c = layer.getBounds().getCenter();
+            lat = c.lat;
+            lon = c.lng;
+          }
+          layer.bindPopup(buildFeaturePopupHtml(feature.properties, lat, lon));
+        }
+      });
+
+      overlayLayerGroup.addLayer(gjLayer);
+      if (overlayLayerGroup.getLayers().length > 0) {
+        map.fitBounds(overlayLayerGroup.getBounds(), { padding: [30, 30] });
+        document.getElementById('clearOverlayBtn').style.display = "inline-flex";
+        document.getElementById('status').textContent = `GeoJSON overlay loaded (${count > 0 ? count + ' points' : 'features'}).`;
+      }
+    }
+
+    function clearOverlay() {
+      overlayLayerGroup.clearLayers();
+      document.getElementById('clearOverlayBtn').style.display = "none";
+      document.getElementById('status').textContent = "Overlay cleared.";
+    }
+
+    // 4. Open-Meteo Irradiance Fetcher (Strictly Past / Elapsed Hours Only)
+    function classifySky(ghi, hourFloat) {
+      const distFromNoon = Math.abs(hourFloat - 12.0);
+      const clearSkyApprox = Math.max(150, 920 * Math.cos((distFromNoon / 6.5) * (Math.PI / 2)));
+      const ratio = ghi / clearSkyApprox;
+      if (ratio >= 0.82) return "Clear Sunny";
+      if (ratio >= 0.62) return "Hazy / Thin Cloud";
+      if (ratio >= 0.35) return "Partly Cloudy";
+      return "Overcast";
+    }
+
+    async function fetchIrradiance() {
+      if (!validateSurveyDate(true)) {
+        return;
+      }
+
+      const lat = parseFloat(document.getElementById('lat').value);
+      const lon = parseFloat(document.getElementById('lon').value);
+      const dateStr = document.getElementById('date').value;
+      const tilt = parseFloat(document.getElementById('tilt').value) || 23;
+      const statusEl = document.getElementById('status');
+      const todayInfoBanner = document.getElementById('todayInfoBanner');
+      const todayInfoText = document.getElementById('todayInfoText');
+
+      if (isNaN(lat) || isNaN(lon)) {
+        alert("Please enter valid Latitude and Longitude.");
+        return;
+      }
+
+      statusEl.textContent = "Fetching irradiance data...";
+      currentRows = [];
+
+      const now = new Date();
+      const todayStr = getLocalDateStr(now);
+      const isToday = (dateStr === todayStr);
+      const currentTotalMins = now.getHours() * 60 + now.getMinutes();
+      const currentHour = now.getHours();
+
+      const selectedDate = new Date(dateStr + "T00:00:00");
+      const todayMidnight = new Date(todayStr + "T00:00:00");
+      const diffDays = Math.round((todayMidnight - selectedDate) / (1000 * 60 * 60 * 24));
+
+      const isArchive = diffDays > 5;
+      const baseUrl = isArchive
+        ? "https://archive-api.open-meteo.com/v1/archive"
+        : "https://api.open-meteo.com/v1/forecast";
+
+      const params = new URLSearchParams({
+        latitude: lat,
+        longitude: lon,
+        start_date: dateStr,
+        end_date: dateStr,
+        hourly: "shortwave_radiation,direct_normal_irradiance,global_tilted_irradiance",
+        tilt: tilt,
+        azimuth: 0,
+        timezone: "Asia/Kolkata"
+      });
+
+      try {
+        const resp = await fetch(`${baseUrl}?${params.toString()}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        if (!data.hourly || !data.hourly.time) {
+          throw new Error("No hourly radiation data returned for this date.");
+        }
+
+        const times = data.hourly.time;
+        const ghiArr = data.hourly.shortwave_radiation;
+        const dniArr = data.hourly.direct_normal_irradiance;
+        const gtiArr = data.hourly.global_tilted_irradiance;
+
+        const hourlyMap = {};
+        times.forEach((t, idx) => {
+          const hr = parseInt(t.split("T")[1].split(":")[0], 10);
+          hourlyMap[hr] = {
+            ghi: ghiArr[idx] ?? 0,
+            dni: dniArr[idx] ?? 0,
+            gti: gtiArr[idx] ?? ghiArr[idx] ?? 0
+          };
+        });
+
+        const tbody = document.getElementById('resultBody');
+        tbody.innerHTML = "";
+
+        let sumTilted = 0;
+        let maxTilted = 0;
+        let elapsedCount = 0;
+        let elapsedKwhM2 = 0;
+
+        for (let h = 0; h < 24; h++) {
+          if (hourlyMap[h] && (!isToday || h <= currentHour)) {
+            elapsedKwhM2 += (hourlyMap[h].gti / 1000);
+          }
+        }
+
+        let excelRow = 19;
+        for (let step = 0; step < 18; step++) {
+          const totalMins = 8 * 60 + step * 30;
+          const hh = Math.floor(totalMins / 60);
+          const mm = totalMins % 60;
+          const timeLabel = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+
+          // Check if this slot is in the future on today's date
+          const isFutureSlot = isToday && (totalMins > currentTotalMins);
+
+          if (isFutureSlot) {
+            currentRows.push({
+              excelRow,
+              timeLabel,
+              sky: "Pending",
+              gti: "",
+              ghi: "",
+              dni: "",
+              isFuture: true
+            });
+
+            const tr = document.createElement('tr');
+            tr.className = "future-slot";
+            tr.innerHTML = `
+              <td>Row ${excelRow}</td>
+              <td class="num">${timeLabel}</td>
+              <td>Pending (Future Time)</td>
+              <td>—</td>
+              <td>—</td>
+              <td>—</td>
+            `;
+            tbody.appendChild(tr);
+            excelRow++;
+            continue;
+          }
+
+          const h0 = hourlyMap[hh] || { ghi: 0, dni: 0, gti: 0 };
+          // Do not interpolate using next hour (hh + 1) if next hour is in the future today
+          const canUseNextHour = !isToday || ((hh + 1) <= currentHour);
+          const h1 = (canUseNextHour && hourlyMap[hh + 1]) ? hourlyMap[hh + 1] : h0;
+          const w = mm === 30 ? 0.5 : 0.0;
+
+          const ghi = Math.round(h0.ghi * (1 - w) + h1.ghi * w);
+          const dni = Math.round(h0.dni * (1 - w) + h1.dni * w);
+          const gti = Math.round(h0.gti * (1 - w) + h1.gti * w);
+          const sky = classifySky(ghi, hh + mm / 60);
+
+          sumTilted += gti;
+          if (gti > maxTilted) maxTilted = gti;
+          elapsedCount++;
+
+          currentRows.push({
+            excelRow,
+            timeLabel,
+            sky,
+            gti,
+            ghi,
+            dni,
+            isFuture: false
+          });
+
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>Row ${excelRow}</td>
+            <td class="num">${timeLabel}</td>
+            <td>${sky}</td>
+            <td class="num" style="color:#0f766e;">${gti}</td>
+            <td class="num">${ghi}</td>
+            <td class="num">${dni}</td>
+          `;
+          tbody.appendChild(tr);
+          excelRow++;
+        }
+
+        if (isToday) {
+          const nowLabel = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          todayInfoText.textContent = `Current time is ${nowLabel} IST. Showing ${elapsedCount} elapsed time slots only; upcoming hours after ${nowLabel} are withheld so forecast data is not mixed with observed survey records.`;
+          todayInfoBanner.style.display = "flex";
+        } else {
+          todayInfoBanner.style.display = "none";
+        }
+
+        document.getElementById('summaryBar').style.display = "grid";
+        document.getElementById('kpiPeakTilted').textContent = elapsedCount > 0 ? `${maxTilted} W/m²` : "—";
+        document.getElementById('kpiMeanTilted').textContent = elapsedCount > 0 ? `${Math.round(sumTilted / elapsedCount)} W/m²` : "—";
+        document.getElementById('kpiInsolation').textContent = `${elapsedKwhM2.toFixed(2)} kWh/m²`;
+        document.getElementById('kpiSource').textContent = isArchive ? "Historical Archive" : (isToday ? "Today (Elapsed Only)" : "Recent Analysis (0–5d)");
+        statusEl.textContent = `Loaded ${elapsedCount} elapsed slots for ${dateStr}`;
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+        alert("Failed to fetch irradiance data: " + err.message);
+      }
+    }
+
+    function copyTiltedColumn() {
+      if (!currentRows.length) return alert("Fetch data first.");
+      const text = currentRows.map(r => r.isFuture ? "" : r.gti).join("\n");
+      navigator.clipboard.writeText(text).then(() => {
+        document.getElementById('status').textContent = "Copied elapsed Tilted W/m² values — select cell C19 in Excel and press Ctrl+V!";
+      });
+    }
+
+    function copyGHIColumn() {
+      if (!currentRows.length) return alert("Fetch data first.");
+      const text = currentRows.map(r => r.isFuture ? "" : r.ghi).join("\n");
+      navigator.clipboard.writeText(text).then(() => {
+        document.getElementById('status').textContent = "Copied elapsed GHI W/m² values — select cell C19 in Excel and press Ctrl+V!";
+      });
+    }
+
+    function downloadCSV() {
+      if (!currentRows.length) return alert("Fetch data first.");
+      const lat = document.getElementById('lat').value;
+      const lon = document.getElementById('lon').value;
+      const elev = document.getElementById('altitude').value;
+      const dateStr = document.getElementById('date').value;
+      const lines = [`# Lat: ${lat}, Lon: ${lon}, Altitude: ${elev}, Date: ${dateStr}`,
+                     "Excel_Row,Time_IST,Sky_Condition,Tilted_Irradiance_Wm2,GHI_Wm2,DNI_Wm2"];
+      currentRows.forEach(r => {
+        lines.push(`${r.excelRow},${r.timeLabel},"${r.sky}",${r.gti},${r.ghi},${r.dni}`);
+      });
+      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Irradiance_${lat}_${lon}_${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>

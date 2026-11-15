@@ -1,0 +1,2893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WBADMIP Phase-II • e-Office Inner Page Parser & Reconciler</title>
+  <!-- Optional xlsx-js-style CDN for native styled .xlsx export (with automatic SpreadsheetML .xls fallback) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-page: #f1f5f9;
+      --bg-card: #ffffff;
+      --bg-subtle: #f8fafc;
+      --border-light: #cbd5e1;
+      --border-soft: #e2e8f0;
+      --text-main: #0f172a;
+      --text-body: #334155;
+      --text-muted: #64748b;
+      --primary: #1e3a8a;
+      --primary-hover: #172554;
+      --primary-soft: #eff6ff;
+      --emerald: #059669;
+      --emerald-hover: #047857;
+      --amber: #d97706;
+      --amber-hover: #b45309;
+      --amber-bg: #fffbeb;
+      --amber-border: #f59e0b;
+      --rose: #be123c;
+      --rose-bg: #fff1f2;
+      --rose-border: #f43f5e;
+      --radius-lg: 14px;
+      --radius-md: 10px;
+      --radius-sm: 6px;
+      --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08);
+      --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.1);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Runtime Error Banner */
+    .runtime-banner {
+      background: #881337;
+      color: #ffffff;
+      padding: 10px 20px;
+      font-size: 13px;
+      border-bottom: 1px solid #be123c;
+    }
+
+    .runtime-inner {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    /* Header */
+    .app-header {
+      background: linear-gradient(135deg, #0f172a 0%, #172554 55%, #0f172a 100%);
+      color: #ffffff;
+      border-bottom: 1px solid rgba(96, 165, 250, 0.25);
+      box-shadow: var(--shadow-md);
+    }
+
+    .header-container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 20px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand-box {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      background: rgba(59, 130, 246, 0.18);
+      border: 1px solid rgba(147, 197, 253, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .brand-badges {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .pill-phase {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      background: rgba(59, 130, 246, 0.25);
+      color: #bfdbfe;
+      border: 1px solid rgba(147, 197, 253, 0.35);
+      padding: 2px 10px;
+      border-radius: 999px;
+    }
+
+    .pill-sub {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .app-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      color: #ffffff;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+
+    .btn:disabled {
+      opacity: 0.48;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .btn-dark {
+      background: #1e293b;
+      color: #f1f5f9;
+      border-color: #475569;
+    }
+    .btn-dark:hover { background: #334155; }
+
+    .btn-dark-amber {
+      background: #1e293b;
+      color: #fde68a;
+      border-color: rgba(245, 158, 11, 0.45);
+    }
+    .btn-dark-amber:hover { background: #334155; }
+
+    .btn-primary {
+      background: #1d4ed8;
+      color: #ffffff;
+    }
+    .btn-primary:hover { background: #1e40af; }
+
+    .btn-emerald {
+      background: var(--emerald);
+      color: #ffffff;
+    }
+    .btn-emerald:hover { background: var(--emerald-hover); }
+
+    .btn-amber {
+      background: var(--amber);
+      color: #ffffff;
+    }
+    .btn-amber:hover { background: var(--amber-hover); }
+
+    .btn-rose {
+      background: #e11d48;
+      color: #ffffff;
+      padding: 6px 11px;
+      font-size: 12px;
+    }
+    .btn-rose:hover { background: #be123c; }
+
+    .btn-outline {
+      background: #ffffff;
+      color: var(--text-body);
+      border-color: var(--border-light);
+    }
+    .btn-outline:hover { background: #f8fafc; }
+
+    .btn-amber-soft {
+      background: #fffbeb;
+      color: #78350f;
+      border-color: #fcd34d;
+    }
+    .btn-amber-soft:hover { background: #fef3c7; }
+
+    /* Main Layout */
+    .main-wrap {
+      flex: 1;
+      max-width: 1280px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Toast Banner */
+    .toast {
+      border-radius: var(--radius-lg);
+      padding: 14px 18px;
+      border: 1px solid;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      box-shadow: var(--shadow-sm);
+    }
+    .toast-success { background: #ecfdf5; border-color: #6ee7b7; color: #064e3b; }
+    .toast-warning { background: #fffbeb; border-color: #fcd34d; color: #78350f; }
+    .toast-error { background: #fff1f2; border-color: #fda4af; color: #881337; }
+    .toast-left { display: flex; align-items: flex-start; gap: 10px; }
+    .toast-title { font-size: 14px; font-weight: 700; }
+    .toast-msg { font-size: 13px; margin-top: 2px; }
+    .toast-close {
+      background: transparent;
+      border: none;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      color: inherit;
+      opacity: 0.7;
+      padding: 2px 6px;
+    }
+
+    /* Dropzone Card */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .dropzone {
+      border: 2px dashed #94a3b8;
+      border-radius: 12px;
+      background: #f8fafc;
+      padding: 28px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .dropzone:hover, .dropzone.drag-over {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+
+    .dz-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #dbeafe;
+      color: #1d4ed8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px auto;
+    }
+
+    .dz-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .dz-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      max-width: 740px;
+      margin: 6px auto 16px auto;
+    }
+
+    .dz-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: #e2e8f0;
+      color: #1e3a8a;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .status-badge {
+      font-size: 12px;
+      font-weight: 600;
+      color: #475569;
+      background: #e2e8f0;
+      padding: 5px 12px;
+      border-radius: 999px;
+    }
+
+    /* Warning Alert Cards */
+    .alerts-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .alert-card {
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      border: 1px solid;
+      border-left-width: 5px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .alert-amber {
+      background: var(--amber-bg);
+      border-color: #fde68a;
+      border-left-color: var(--amber-border);
+      color: #78350f;
+    }
+
+    .alert-rose {
+      background: var(--rose-bg);
+      border-color: #fecdd3;
+      border-left-color: var(--rose-border);
+      color: #881337;
+    }
+
+    .alert-orange {
+      background: #fff7ed;
+      border-color: #fed7aa;
+      border-left-color: #f97316;
+      color: #7c2d12;
+    }
+
+    .alert-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .alert-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .alert-title {
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .alert-pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 10px;
+      border-radius: 999px;
+    }
+
+    .pill-amber { background: #fde68a; color: #78350f; }
+    .pill-rose { background: #fecdd3; color: #881337; }
+    .pill-orange { background: #fed7aa; color: #7c2d12; }
+
+    .alert-sub {
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .alert-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .alert-item {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .alert-btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 14px;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .kpi-card.kpi-warn {
+      background: #fffbeb;
+      border: 2px solid #f59e0b;
+    }
+
+    .kpi-card.kpi-danger {
+      background: #fff1f2;
+      border: 2px solid #f43f5e;
+    }
+
+    .kpi-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .kpi-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-top: 4px;
+    }
+
+    .kpi-value.blue { color: #1d4ed8; }
+    .kpi-value.emerald { color: #047857; }
+    .kpi-value.amber { color: #b45309; }
+    .kpi-value.rose { color: #be123c; }
+
+    .kpi-foot {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Tabs Workspace */
+    .workspace-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .tab-bar {
+      display: flex;
+      overflow-x: auto;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border-soft);
+    }
+
+    .tab-btn {
+      padding: 14px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      font-family: inherit;
+      transition: all 0.15s ease;
+    }
+
+    .tab-btn:hover {
+      color: #0f172a;
+      background: #f1f5f9;
+    }
+
+    .tab-btn.active {
+      color: #1e3a8a;
+      background: #eff6ff;
+      border-bottom-color: #1d4ed8;
+    }
+
+    .tab-count {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      color: #334155;
+    }
+
+    .tab-btn.active .tab-count {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .tab-panel {
+      padding: 20px;
+    }
+
+    .panel-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .panel-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Filter Bar */
+    .filter-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .input-ctrl, .select-ctrl {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13px;
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--text-main);
+      font-family: inherit;
+    }
+
+    .input-ctrl:focus, .select-ctrl:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+
+    .chk-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: #f1f5f9;
+      border: 1px solid var(--border-light);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .chk-pill.rose {
+      background: #fff1f2;
+      border-color: #fecdd3;
+      color: #881337;
+    }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      max-height: 560px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+
+    th {
+      padding: 11px 12px;
+      font-weight: 700;
+      text-align: left;
+      white-space: nowrap;
+      border-bottom: 1px solid #334155;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    thead.blue th { background: #1e3a8a; color: #ffffff; }
+    thead.teal th { background: #0f766e; color: #ffffff; }
+    thead.indigo th { background: #312e81; color: #ffffff; }
+    thead.slate th { background: #1e293b; color: #ffffff; }
+
+    th.sortable { cursor: pointer; }
+    th.sortable:hover { filter: brightness(1.15); }
+
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border-soft);
+      color: var(--text-body);
+    }
+
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    tbody tr:hover { background: #eff6ff; }
+
+    tbody tr.row-danger { background: #ffe4e6 !important; }
+    tbody tr.row-warning { background: #fef3c7 !important; }
+    tbody tr.row-info { background: #eff6ff !important; }
+
+    tfoot td {
+      background: #dbeafe;
+      color: #1e3a8a;
+      font-weight: 800;
+      border-top: 2px solid #1e3a8a;
+      border-bottom: 2px solid #1e3a8a;
+      padding: 11px 12px;
+    }
+
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .nowrap { white-space: nowrap; }
+    .font-bold { font-weight: 700; }
+    .text-danger { color: #be123c; font-weight: 800; }
+    .text-blue { color: #1e3a8a; font-weight: 700; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .badge-ok { background: #dcfce7; color: #166534; }
+    .badge-warn { background: #fde68a; color: #78350f; }
+    .badge-danger { background: #fecdd3; color: #881337; }
+    .badge-orange { background: #ffedd5; color: #9a3412; }
+    .badge-blue { background: #dbeafe; color: #1e40af; }
+
+    .app-footer {
+      background: #ffffff;
+      border-top: 1px solid var(--border-soft);
+      padding: 14px 24px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Runtime Error Alert Banner -->
+  <div id="globalErrorBanner" class="runtime-banner hidden">
+    <div class="runtime-inner">
+      <div><strong>Runtime Alert:</strong> <span id="globalErrorText"></span></div>
+      <button type="button" class="toast-close" onclick="document.getElementById('globalErrorBanner').classList.add('hidden')">✕</button>
+    </div>
+  </div>
+
+  <!-- Header & Toolbar -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-box">
+        <div class="brand-icon">
+          <svg width="24" height="24" fill="none" stroke="#93c5fd" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <div>
+          <div class="brand-badges">
+            <span class="pill-phase">WBADMIP Phase-II</span>
+            <span class="pill-sub">e-Office Dump Reconciliation Utility</span>
+          </div>
+          <h1 class="app-title">e-Office Inner Page Parser &amp; Reconciler</h1>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button id="btnLoadSample" type="button" class="btn btn-dark" title="Fetch ./sample.txt from server (with automatic built-in template fallback)">
+          Load sample.txt
+        </button>
+        <button id="btnDownloadSample" type="button" class="btn btn-dark-amber" title="Download sample.txt for editing and modification">
+          Download sample.txt
+        </button>
+        <button id="btnDownloadRectifiedTxt" type="button" class="btn btn-amber" disabled title="Download deduplicated input .txt file without duplicate Computer Number blocks">
+          Download Rectified .txt
+        </button>
+        <button id="btnExportXlsx" type="button" class="btn btn-emerald" disabled title="Export styled multi-sheet Excel workbook with live formulas and full cell borders">
+          Export Reconciled Excel
+        </button>
+        <button id="btnExportCsv" type="button" class="btn btn-primary" disabled>
+          Export CSV
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="main-wrap">
+
+    <!-- Toast Notification -->
+    <div id="toastBanner" class="toast toast-success hidden">
+      <div class="toast-left">
+        <div>
+          <div id="toastTitle" class="toast-title"></div>
+          <div id="toastMessage" class="toast-msg"></div>
+        </div>
+      </div>
+      <button type="button" id="btnCloseToast" class="toast-close">✕</button>
+    </div>
+
+    <!-- Upload Dropzone -->
+    <section class="card">
+      <div id="dropZone" class="dropzone">
+        <input type="file" id="fileInput" accept=".txt,text/plain" class="hidden" />
+        <div class="dz-icon">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+        </div>
+        <h2 class="dz-title">Drop your e-Office Inner Page Text Dump (<code>.txt</code>) here</h2>
+        <p class="dz-desc">
+          Supports UTF-16 LE / UTF-16 BE / UTF-8 BOM auto-detection, warns on duplicate Computer Nos., lets you delete duplicate blocks &amp; download rectified <code>.txt</code>, overwrites Note #1 rows with Note #3/#4 rows, restores Excel date-corrupted plots/serials, and flags AA amounts exceeding <strong>₹2,00,00,000 (₹2 Crore)</strong>.
+        </p>
+        <div class="dz-actions">
+          <button type="button" id="btnBrowseFile" class="btn btn-primary">Browse .txt File</button>
+          <button type="button" id="btnDropZoneLoadSample" class="btn btn-amber-soft">Load Server sample.txt</button>
+          <button type="button" id="btnDropZoneDownloadSample" class="btn btn-outline">Download sample.txt</button>
+          <span id="fileStatusBadge" class="status-badge">No file loaded yet</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results Section -->
+    <div id="resultsWorkspace" class="hidden" style="display:flex; flex-direction:column; gap:20px;">
+
+      <!-- Warning Banners -->
+      <section class="alerts-stack">
+        <!-- 1. Duplicate Computer Number Warning -->
+        <div id="dupCompAlertCard" class="alert-card alert-amber hidden">
+          <div class="alert-header">
+            <div style="flex:1; min-width:260px;">
+              <div class="alert-title-row">
+                <span class="alert-title">⚠ Warning: Duplicate Computer Number(s) Detected</span>
+                <span id="dupCompBadgeCount" class="alert-pill pill-amber"></span>
+              </div>
+              <p class="alert-sub">
+                The following Computer Numbers appeared multiple times in the uploaded dump. Delete duplicate blocks and download a rectified <code>.txt</code> file:
+              </p>
+            </div>
+            <div class="alert-btns">
+              <button type="button" id="btnDeleteAllDupBlocks" class="btn btn-amber">
+                Delete All Duplicate Blocks (Keep Latest)
+              </button>
+              <button type="button" id="btnCardDownloadRectified" class="btn btn-outline">
+                Download Rectified .txt
+              </button>
+            </div>
+          </div>
+          <div id="dupCompDetailsList" class="alert-grid"></div>
+        </div>
+
+        <!-- 2. AA Amount > Rs. 2,00,00,000 Alert -->
+        <div id="aaLimitAlertCard" class="alert-card alert-rose hidden">
+          <div class="alert-title-row">
+            <span class="alert-title">🚨 Threshold Alert: Administrative Approval (AA) Amount Exceeds ₹2,00,00,000 (₹2 Crore)</span>
+            <span id="aaLimitBadgeCount" class="alert-pill pill-rose"></span>
+          </div>
+          <p class="alert-sub">
+            One or more e-Office files or individual schemes exceed the <strong>₹2,00,00,000</strong> financial ceiling:
+          </p>
+          <div id="aaLimitDetailsList" class="alert-grid"></div>
+        </div>
+
+        <!-- 3. Mismatch / Incomplete Files Alert -->
+        <div id="mismatchAlertCard" class="alert-card alert-orange hidden">
+          <div class="alert-title-row">
+            <span class="alert-title">File Reconciliation Discrepancies (Incomplete / Total Mismatch)</span>
+            <span id="mismatchBadgeCount" class="alert-pill pill-orange"></span>
+          </div>
+          <div id="mismatchDetailsList" class="alert-grid"></div>
+        </div>
+      </section>
+
+      <!-- KPI Cards -->
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Unique e-Office Files</div>
+          <div id="kpiUniqueFiles" class="kpi-value">0</div>
+          <div id="kpiRawBlocks" class="kpi-foot">From 0 raw blocks</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Deduplicated Schemes</div>
+          <div id="kpiUniqueSchemes" class="kpi-value blue">0</div>
+          <div id="kpiDistrictCount" class="kpi-foot">Across 0 districts</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Total AA Amount (₹)</div>
+          <div id="kpiTotalAA" class="kpi-value emerald">₹0</div>
+          <div id="kpiTotalAACrore" class="kpi-foot">₹0.00 Crore</div>
+        </div>
+
+        <div id="kpiDupCard" class="kpi-card">
+          <div class="kpi-label">Duplicate Comp. Nos.</div>
+          <div id="kpiDupCompCount" class="kpi-value">0</div>
+          <div class="kpi-foot">Latest snapshot kept</div>
+        </div>
+
+        <div id="kpiThresholdCard" class="kpi-card">
+          <div class="kpi-label">&gt; ₹2 Cr Alerts</div>
+          <div id="kpiOver2CrCount" class="kpi-value">0</div>
+          <div class="kpi-foot">Files &amp; schemes &gt; ₹2,00,00,000</div>
+        </div>
+      </section>
+
+      <!-- 5 Interactive Workbook Tabs -->
+      <section class="workspace-card">
+        <div class="tab-bar">
+          <button type="button" data-tab="tabSummary" class="tab-btn active">
+            <span>1. District &amp; Scheme Summary</span>
+            <span id="badgeTabSum" class="tab-count">0</span>
+          </button>
+          <button type="button" data-tab="tabVerification" class="tab-btn">
+            <span>2. File Verification</span>
+            <span id="badgeTabVer" class="tab-count">0</span>
+          </button>
+          <button type="button" data-tab="tabCleanedData" class="tab-btn">
+            <span>3. Cleaned Scheme Data</span>
+            <span id="badgeTabData" class="tab-count">0</span>
+          </button>
+          <button type="button" data-tab="tabIssuesLog" class="tab-btn">
+            <span>4. Issues Fixed Log</span>
+            <span id="badgeTabLog" class="tab-count">0</span>
+          </button>
+          <button type="button" data-tab="tabRawBlocks" class="tab-btn">
+            <span>5. Raw File Blocks &amp; Deduplication</span>
+            <span id="badgeTabBlocks" class="tab-count">0</span>
+          </button>
+        </div>
+
+        <!-- TAB 1: SUMMARY -->
+        <div id="tabSummary" class="tab-panel">
+          <div class="panel-head">
+            <div>
+              <h3 class="panel-title">WBADMIP Phase-II: District-Wise &amp; Scheme-Wise Administrative Approval Summary</h3>
+              <p class="panel-sub">Cross-tabulation of deduplicated scheme amounts (in ₹) across Districts and Scheme Types.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead id="theadSummary" class="blue"></thead>
+              <tbody id="tbodySummary"></tbody>
+              <tfoot id="tfootSummary"></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 2: FILE VERIFICATION -->
+        <div id="tabVerification" class="tab-panel hidden">
+          <div class="panel-head">
+            <div>
+              <h3 class="panel-title">e-Office File-Level Verification &amp; Audit</h3>
+              <p class="panel-sub">Checks Computer No. uniqueness, Stated vs. Calculated totals, and ₹2,00,00,000 ceiling compliance per file.</p>
+            </div>
+            <label class="chk-pill">
+              <input type="checkbox" id="chkVerAlertsOnly" />
+              <span>Show Flagged Files Only (Duplicates / &gt; ₹2 Cr / Mismatch)</span>
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead class="teal">
+                <tr>
+                  <th>File No.</th>
+                  <th class="text-center">Computer No.</th>
+                  <th>Subject</th>
+                  <th class="text-center">Schemes Extracted</th>
+                  <th class="text-right">Calculated Total (₹)</th>
+                  <th class="text-right">Stated File Total (₹)</th>
+                  <th>Verification Status &amp; Flags</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyVerification"></tbody>
+              <tfoot id="tfootVerification"></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 3: CLEANED SCHEME DATA -->
+        <div id="tabCleanedData" class="tab-panel hidden">
+          <div class="filter-bar">
+            <input type="text" id="searchSchemeInput" class="input-ctrl" placeholder="Search Scheme ID, Name, Comp. No., Block, Mouza..." />
+            <select id="filterDistrict" class="select-ctrl">
+              <option value="">All Districts</option>
+            </select>
+            <select id="filterSchemeType" class="select-ctrl">
+              <option value="">All Scheme Types</option>
+            </select>
+            <label class="chk-pill rose">
+              <input type="checkbox" id="chkSchemeOver2CrOnly" />
+              <span>Schemes &gt; ₹2 Cr Only</span>
+            </label>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:12px; color:#64748b; margin-bottom:8px;">
+            <span id="cleanedCountLabel">Showing 0 schemes</span>
+            <span>Click column headers to sort</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead class="indigo">
+                <tr>
+                  <th data-sort="fileNo" class="sortable">File No. ⇅</th>
+                  <th data-sort="compNo" class="sortable text-center">Comp. No. ⇅</th>
+                  <th data-sort="slNo" class="sortable text-center">Sl. No. ⇅</th>
+                  <th data-sort="schID" class="sortable">Scheme ID ⇅</th>
+                  <th data-sort="schName" class="sortable" style="min-width:220px;">Name of the Scheme ⇅</th>
+                  <th data-sort="type" class="sortable">Type ⇅</th>
+                  <th data-sort="district" class="sortable">District ⇅</th>
+                  <th data-sort="block" class="sortable">Block ⇅</th>
+                  <th data-sort="gp" class="sortable">GP ⇅</th>
+                  <th data-sort="mouza" class="sortable">Mouza ⇅</th>
+                  <th data-sort="jl" class="sortable text-center">J.L. No. ⇅</th>
+                  <th data-sort="plot" class="sortable text-center">Plot No. ⇅</th>
+                  <th data-sort="amount" class="sortable text-right">Admin. Approval (₹) ⇅</th>
+                  <th data-sort="treasury" class="sortable">Treasury ⇅</th>
+                  <th data-sort="ddo" class="sortable">D.D.O ⇅</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyCleanedData"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 4: ISSUES FIXED LOG -->
+        <div id="tabIssuesLog" class="tab-panel hidden">
+          <div class="panel-head">
+            <div>
+              <h3 class="panel-title">Audit Trail &amp; Automated Cleaning Log</h3>
+              <p class="panel-sub">Breakdown of duplicate Computer Numbers, ₹2,00,00,000 threshold alerts, revision table overwrites, and text-parsing repairs.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead class="slate">
+                <tr>
+                  <th>Issue / Rule Category</th>
+                  <th>Affected File(s) / Computer No(s).</th>
+                  <th>Finding / Root Cause</th>
+                  <th>Action Taken / Warning Status</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyIssuesLog"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 5: RAW FILE BLOCKS & DEDUPLICATION -->
+        <div id="tabRawBlocks" class="tab-panel hidden">
+          <div class="panel-head">
+            <div>
+              <h3 class="panel-title">Raw e-Office File Blocks &amp; Rectified Text Generator</h3>
+              <p class="panel-sub">Delete duplicate Computer Number blocks individually or in bulk, then export the rectified <code>.txt</code> file.</p>
+            </div>
+            <div class="toolbar">
+              <button type="button" id="btnTabDeleteAllDuplicates" class="btn btn-amber">
+                Remove All Duplicate Blocks
+              </button>
+              <button type="button" id="btnTabDownloadRectified" class="btn btn-primary">
+                Download Rectified .txt
+              </button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead class="slate">
+                <tr>
+                  <th class="text-center">Block #</th>
+                  <th class="text-center">Computer No.</th>
+                  <th>File No.</th>
+                  <th>Subject</th>
+                  <th class="text-center">Lines</th>
+                  <th>Duplicate Status</th>
+                  <th class="text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="tbodyRawBlocks"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    WBADMIP Phase-II e-Office Inner Page Parser &amp; Reconciler • Threshold Alert Limit: ₹2,00,00,000 (₹2 Crore) • Client-Side Processing
+  </footer>
+
+  <script>
+    (function () {
+      "use strict";
+
+      window.onerror = function (msg, url, lineNo) {
+        var banner = document.getElementById("globalErrorBanner");
+        var text = document.getElementById("globalErrorText");
+        if (banner && text) {
+          text.textContent = msg + (lineNo ? " (Line " + lineNo + ")" : "");
+          banner.classList.remove("hidden");
+        }
+        return false;
+      };
+
+      var AA_THRESHOLD_LIMIT = 20000000;
+
+      var parsedState = {
+        sourceFileName: "",
+        encodingDetected: "UTF-8",
+        rawBlocks: [],
+        removedDuplicateCount: 0,
+        rawBlockCount: 0,
+        uniqueFileCount: 0,
+        duplicateCompMap: new Map(),
+        verificationList: [],
+        allSchemes: [],
+        districts: [],
+        schemeTypes: [],
+        issuesLog: [],
+        sortCol: null,
+        sortAsc: true
+      };
+
+      // =========================================================================
+      // 1. BOM / ENCODING AUTO-DETECTION & FILE READER
+      // =========================================================================
+      function decodeArrayBufferAutoBOM(buffer) {
+        var bytes = new Uint8Array(buffer);
+        var encoding = "utf-8";
+        var label = "UTF-8";
+
+        if (bytes.length >= 2) {
+          if (bytes[0] === 0xFF && bytes[1] === 0xFE) {
+            encoding = "utf-16le";
+            label = "UTF-16 LE";
+          } else if (bytes[0] === 0xFE && bytes[1] === 0xFF) {
+            encoding = "utf-16be";
+            label = "UTF-16 BE";
+          }
+        }
+
+        var decoder = new TextDecoder(encoding);
+        var text = decoder.decode(bytes);
+        text = text.replace(/\u0000/g, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        return { text: text, encoding: label };
+      }
+
+      function handleFileUpload(file) {
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            var decoded = decodeArrayBufferAutoBOM(e.target.result);
+            document.getElementById("fileStatusBadge").textContent =
+              "Loaded: " + file.name + " (" + decoded.encoding + ")";
+            runEOfficeParser(decoded.text, file.name, decoded.encoding, 0);
+          } catch (err) {
+            showToast("error", "File Read Error", err.message || "Unable to decode the selected text file.");
+          }
+        };
+        reader.onerror = function () {
+          showToast("error", "File Read Error", "Could not read the selected file from disk.");
+        };
+        reader.readAsArrayBuffer(file);
+      }
+
+      // =========================================================================
+      // 2. VBA-EQUIVALENT HELPERS
+      // =========================================================================
+      function cleanLineTabs(s) {
+        return String(s || "").replace(/\t/g, " ").replace(/\s{2,}/g, " ").trim();
+      }
+
+      function isDigitsOnly(s) {
+        return /^[0-9]+$/.test(String(s || ""));
+      }
+
+      function isSchemeID(s) {
+        return /^2-\d{2}-\d{2}-.+/.test(String(s || "").trim());
+      }
+
+      function fixExcelDatePlot(p) {
+        var trimmed = String(p || "").trim();
+        var m = trimmed.match(/^([A-Za-z]{3})-(.+)$/);
+        if (m) {
+          var monthMap = {
+            jan: "1", feb: "2", mar: "3", apr: "4", may: "5", jun: "6",
+            jul: "7", aug: "8", sep: "9", oct: "10", nov: "11", dec: "12"
+          };
+          var mNum = monthMap[m[1].toLowerCase()] || m[1];
+          return mNum + "/" + m[2];
+        }
+        return trimmed;
+      }
+
+      function normalizeDistrict(d) {
+        var trimmed = String(d || "").trim();
+        var key = trimmed.toLowerCase().replace(/\s+/g, "");
+        if (key === "bankura") return "Bankura";
+        if (key === "paschimburdwan" || key === "paschimbardhaman") return "Paschim Bardhaman";
+        if (key === "north24parganas" || key === "north24paraganas") return "North 24 Parganas";
+        if (key === "south24parganas" || key === "south24paraganas") return "South 24 Parganas";
+        return trimmed;
+      }
+
+      function normalizeSchemeType(t) {
+        var trimmed = String(t || "").trim();
+        var key = trimmed.toUpperCase().replace(/\s+/g, "");
+        if (key === "WDS") return "WDS";
+        if (key === "WDS(CANAL)") return "WDS (Canal)";
+        if (key === "LDTW(S)" || key === "TW(SOLAR)") return "TW (Solar)";
+        if (key === "PDW(S)" || key === "PDW(SOLAR)") return "PDW (Solar)";
+        if (key === "PDW(CIVILWORKS)") return "PDW (Civil Works)";
+        return trimmed;
+      }
+
+      function extractAmountFromTotalLine(l) {
+        var cleanL = String(l || "").replace(/,/g, "").replace(/\/-\s*$/, "");
+        var numBuf = "";
+        for (var i = cleanL.length - 1; i >= 0; i--) {
+          var ch = cleanL.charAt(i);
+          if ((ch >= "0" && ch <= "9") || ch === ".") {
+            numBuf = ch + numBuf;
+          } else if (numBuf !== "") {
+            break;
+          }
+        }
+        var val = parseFloat(numBuf);
+        return isNaN(val) ? 0 : val;
+      }
+
+      function extractComputerNumber(blkLines) {
+        var limit = Math.min(35, blkLines.length);
+        for (var i = 0; i < limit; i++) {
+          var lClean = cleanLineTabs(blkLines[i]);
+          if (lClean.length === 7 && isDigitsOnly(lClean)) {
+            return lClean;
+          }
+          var match = lClean.match(/with computer number\s+(\d{6,})/i);
+          if (match) {
+            return match[1];
+          }
+        }
+        return "";
+      }
+
+      function extractSubjectFromBlock(blkLines) {
+        var subjLimit = Math.min(35, blkLines.length);
+        for (var i = 0; i < subjLimit; i++) {
+          var lStr = cleanLineTabs(blkLines[i]);
+          if (lStr.indexOf("Subject:") === 0) {
+            var subj = lStr.substring(8).trim();
+            var halfLen = Math.floor(subj.length / 2);
+            if (halfLen > 2) {
+              var firstHalf = subj.substring(0, halfLen).trim();
+              var secondHalf = subj.substring(halfLen).trim();
+              if (firstHalf === secondHalf) {
+                subj = firstHalf;
+              }
+            }
+            return subj;
+          }
+        }
+        return "";
+      }
+
+      function formatINR(num) {
+        var n = Number(num) || 0;
+        return n.toLocaleString("en-IN", { maximumFractionDigits: 0 });
+      }
+
+      function escapeHTML(str) {
+        return String(str == null ? "" : str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function colIndexToLetter(colIdxZeroBased) {
+        var n = colIdxZeroBased + 1;
+        var s = "";
+        while (n > 0) {
+          var rem = (n - 1) % 26;
+          s = String.fromCharCode(65 + rem) + s;
+          n = Math.floor((n - 1) / 26);
+        }
+        return s;
+      }
+
+      // =========================================================================
+      // 3. CORE PARSER & RECONCILIATION ENGINE
+      // =========================================================================
+      function runEOfficeParser(fileContent, fileName, encoding, removedDupCount) {
+        removedDupCount = removedDupCount || 0;
+        var lines = fileContent.split("\n");
+
+        // Split text into individual e-Office File Blocks
+        var blocks = [];
+        var currBlock = [];
+
+        for (var i = 0; i < lines.length; i++) {
+          var lineStr = lines[i];
+          if (lineStr.trim().indexOf("Inner Page of file with number ") === 0 && currBlock.length > 10) {
+            blocks.push(currBlock);
+            currBlock = [];
+          }
+          currBlock.push(lineStr);
+        }
+        if (currBlock.length > 0) {
+          blocks.push(currBlock);
+        }
+
+        if (blocks.length === 0 || blocks[0][0].trim().indexOf("Inner Page of file with number ") !== 0) {
+          showToast("error", "Invalid File Format", "No e-Office 'Inner Page of file with number ...' blocks were found in this text file.");
+          return;
+        }
+
+        // Deduplicate File Blocks by Computer Number / File Number (Keep Latest Snapshot)
+        var dictLatestBlock = new Map();
+        var blockOrder = [];
+        var compOccurrences = new Map();
+        var rawBlockMetadata = [];
+
+        blocks.forEach(function (blk, idx) {
+          var fileNo = cleanLineTabs(blk[0].replace("Inner Page of file with number ", ""));
+          var compNo = extractComputerNumber(blk);
+          var subj = extractSubjectFromBlock(blk);
+          var dedupKey = compNo !== "" ? compNo : fileNo;
+
+          if (!compOccurrences.has(dedupKey)) {
+            compOccurrences.set(dedupKey, {
+              compNo: compNo || "(Missing Comp. No.)",
+              dedupKey: dedupKey,
+              count: 0,
+              fileNos: [],
+              blockIndices: []
+            });
+          }
+          var occ = compOccurrences.get(dedupKey);
+          occ.count += 1;
+          occ.fileNos.push(fileNo);
+          occ.blockIndices.push(idx + 1);
+
+          rawBlockMetadata.push({
+            index: idx,
+            blockNumber: idx + 1,
+            compNo: compNo,
+            dedupKey: dedupKey,
+            fileNo: fileNo,
+            subj: subj,
+            lines: blk,
+            occurrenceNum: occ.count
+          });
+
+          if (!dictLatestBlock.has(dedupKey)) {
+            blockOrder.push(dedupKey);
+          }
+          dictLatestBlock.set(dedupKey, blk);
+        });
+
+        rawBlockMetadata.forEach(function (meta) {
+          var occ = compOccurrences.get(meta.dedupKey);
+          meta.totalOccurrences = occ.count;
+          meta.isDuplicate = occ.count > 1;
+          meta.isLatestSnapshot = meta.occurrenceNum === occ.count;
+        });
+
+        var duplicateCompMap = new Map();
+        compOccurrences.forEach(function (val, key) {
+          if (val.count > 1) {
+            duplicateCompMap.set(key, val);
+          }
+        });
+
+        // Parse Each Unique File Block
+        var dictAllSchemes = new Map();
+        var schemeOrder = [];
+        var fileVerificationList = [];
+        var revisedNoteOverwrites = 0;
+        var excelDateFixes = 0;
+
+        blockOrder.forEach(function (bKey) {
+          var blk = dictLatestBlock.get(bKey);
+          var res = processSingleFileBlock(blk, dictAllSchemes, schemeOrder, duplicateCompMap.has(bKey));
+          fileVerificationList.push(res.verification);
+          revisedNoteOverwrites += res.revisedNoteOverwrites;
+          excelDateFixes += res.excelDateFixes;
+        });
+
+        var allSchemes = schemeOrder.map(function (schID) {
+          return dictAllSchemes.get(schID);
+        });
+
+        var distSet = new Set();
+        var typeSet = new Set();
+        allSchemes.forEach(function (s) {
+          if (s.district) distSet.add(s.district);
+          if (s.type) typeSet.add(s.type);
+        });
+
+        var issuesLog = buildDynamicIssuesLog(
+          duplicateCompMap,
+          fileVerificationList,
+          allSchemes,
+          revisedNoteOverwrites,
+          excelDateFixes,
+          removedDupCount
+        );
+
+        parsedState = {
+          sourceFileName: fileName,
+          encodingDetected: encoding,
+          rawBlocks: rawBlockMetadata,
+          removedDuplicateCount: removedDupCount,
+          rawBlockCount: blocks.length,
+          uniqueFileCount: blockOrder.length,
+          duplicateCompMap: duplicateCompMap,
+          verificationList: fileVerificationList,
+          allSchemes: allSchemes,
+          districts: Array.from(distSet),
+          schemeTypes: Array.from(typeSet),
+          issuesLog: issuesLog,
+          sortCol: null,
+          sortAsc: true
+        };
+
+        document.getElementById("btnExportXlsx").disabled = false;
+        document.getElementById("btnExportCsv").disabled = false;
+        document.getElementById("btnDownloadRectifiedTxt").disabled = false;
+        document.getElementById("resultsWorkspace").classList.remove("hidden");
+
+        renderDashboard();
+
+        var over2CrFiles = fileVerificationList.filter(function (f) { return f.exceeds2Cr; }).length;
+        var over2CrSchemes = allSchemes.filter(function (s) { return s.exceeds2Cr; }).length;
+        if (duplicateCompMap.size > 0 || over2CrFiles > 0 || over2CrSchemes > 0) {
+          showToast(
+            "warning",
+            "Parsed with Reconciliation Warnings",
+            "Extracted " + allSchemes.length + " unique schemes across " + blockOrder.length +
+            " files. Found " + duplicateCompMap.size + " duplicate Computer No(s). and " +
+            (over2CrFiles + over2CrSchemes) + " AA amount alert(s) exceeding ₹2,00,00,000."
+          );
+        } else {
+          showToast(
+            "success",
+            "e-Office File Parsed & Reconciled Successfully",
+            "Extracted " + allSchemes.length + " unique schemes across " + blockOrder.length +
+            " unique Computer Numbers" + (removedDupCount > 0 ? " (" + removedDupCount + " duplicate block(s) removed)" : "") + "."
+          );
+        }
+      }
+
+      function processSingleFileBlock(blk, dictAllSchemes, schemeOrder, isDuplicateComp) {
+        var fileNo = cleanLineTabs(blk[0].replace("Inner Page of file with number ", ""));
+        var compNo = extractComputerNumber(blk);
+        var subj = extractSubjectFromBlock(blk);
+        var defaultDist = "";
+        var defaultType = "";
+        var statedTotal = 0;
+        var hasStatedTotal = false;
+
+        if (subj.indexOf("/") !== -1) {
+          var sParts = subj.split("/");
+          defaultType = normalizeSchemeType(sParts[0].trim());
+          defaultDist = normalizeDistrict(sParts[sParts.length - 1].trim());
+        }
+
+        for (var i = 0; i < blk.length; i++) {
+          var lStr = cleanLineTabs(blk[i]);
+          if (lStr.toLowerCase().indexOf("total administrative approval amount") !== -1) {
+            var amt = extractAmountFromTotalLine(lStr);
+            if (amt > 0) {
+              statedTotal = amt;
+              hasStatedTotal = true;
+            }
+          }
+        }
+
+        var dictFileSchemes = new Map();
+        var fileSchemeOrder = [];
+        var currType = defaultType;
+        var currDist = defaultDist;
+        var currTreasury = "";
+        var currDDO = "";
+        var revisedNoteOverwrites = 0;
+        var excelDateFixes = 0;
+
+        var idx = 0;
+        while (idx < blk.length) {
+          var rowLine = blk[idx];
+          var cols = rowLine.split("\t");
+
+          if (cols.length >= 3 && isSchemeID(cols[1].trim())) {
+            while (cols.length < 13) cols.push("");
+
+            var rawSl = cols[0].trim();
+            var schID = cols[1].trim();
+            var schName = cols[2].trim();
+            var rType = cols[3].trim();
+            var rDist = cols[4].trim();
+            var rBlock = cols[5].trim();
+            var rGP = cols[6].trim();
+            var rMouza = cols[7].trim();
+            var rJL = cols[8].trim();
+            var rawPlot = cols[9].trim();
+            var rPlot = fixExcelDatePlot(rawPlot);
+            var rAmtStr = cols[10].trim();
+            var rTreas = cols[11].trim();
+            var rDDO = cols[12].trim();
+
+            if (rPlot !== rawPlot) excelDateFixes++;
+
+            if (rawSl.indexOf("1900") !== -1) {
+              var slParsed = parseInt(rawSl.split("-")[0], 10);
+              if (!isNaN(slParsed)) {
+                rawSl = String(slParsed);
+                excelDateFixes++;
+              }
+            }
+
+            // Look ahead for split/merged rowspan orphan lines
+            var j = idx + 1;
+            while (j < blk.length) {
+              var nxtLine = blk[j];
+              if (
+                nxtLine.indexOf("Sl. No.\tScheme ID") === 0 ||
+                nxtLine.indexOf("Total") === 0 ||
+                nxtLine.indexOf("Rupees") === 0 ||
+                nxtLine.indexOf("(Rupees") === 0 ||
+                nxtLine.indexOf("Head of Accounts") === 0
+              ) {
+                break;
+              }
+              var nxtCols = nxtLine.split("\t");
+              if (nxtCols.length >= 2 && isSchemeID(nxtCols[1].trim())) {
+                break;
+              }
+              if (nxtCols.length >= 4 && rType === "") rType = nxtCols[3].trim();
+              if (nxtCols.length >= 5 && rDist === "") rDist = nxtCols[4].trim();
+              if (nxtCols.length >= 11 && rAmtStr === "") rAmtStr = nxtCols[10].trim();
+              if (nxtCols.length >= 12 && rTreas === "") rTreas = nxtCols[11].trim();
+              if (nxtCols.length >= 13 && rDDO === "") rDDO = nxtCols[12].trim();
+              j++;
+            }
+
+            if (rType !== "") currType = normalizeSchemeType(rType);
+            if (rDist !== "") currDist = normalizeDistrict(rDist);
+            if (rTreas !== "") currTreasury = rTreas;
+            if (rDDO !== "") currDDO = rDDO;
+
+            var amtVal = parseFloat(rAmtStr.replace(/,/g, "")) || 0;
+
+            var rec = {
+              fileNo: fileNo,
+              compNo: compNo,
+              slNo: rawSl,
+              schID: schID,
+              schName: schName,
+              type: currType || defaultType,
+              district: currDist || defaultDist,
+              block: rBlock,
+              gp: rGP,
+              mouza: rMouza,
+              jl: rJL,
+              plot: rPlot,
+              amount: amtVal,
+              treasury: currTreasury,
+              ddo: currDDO,
+              exceeds2Cr: amtVal > AA_THRESHOLD_LIMIT,
+              isDuplicateComp: isDuplicateComp
+            };
+
+            if (!dictFileSchemes.has(schID)) {
+              fileSchemeOrder.push(schID);
+            } else {
+              revisedNoteOverwrites++;
+            }
+            dictFileSchemes.set(schID, rec);
+
+            idx = j;
+          } else {
+            idx++;
+          }
+        }
+
+        var calcTotal = 0;
+        fileSchemeOrder.forEach(function (k) {
+          var rObj = dictFileSchemes.get(k);
+          calcTotal += rObj.amount;
+          if (!dictAllSchemes.has(k)) {
+            schemeOrder.push(k);
+          }
+          dictAllSchemes.set(k, rObj);
+        });
+
+        var verStatus = "OK";
+        var hasMismatch = false;
+        if (!hasStatedTotal) {
+          verStatus = "INCOMPLETE / TRUNCATED (Missing remaining rows & total)";
+          hasMismatch = true;
+        } else if (Math.abs(calcTotal - statedTotal) > 0.5) {
+          verStatus = "MISMATCH (Calc: ₹" + formatINR(calcTotal) + " vs Stated: ₹" + formatINR(statedTotal) + ")";
+          hasMismatch = true;
+        }
+
+        var exceeds2Cr = calcTotal > AA_THRESHOLD_LIMIT || statedTotal > AA_THRESHOLD_LIMIT;
+
+        return {
+          verification: {
+            fileNo: fileNo,
+            compNo: compNo,
+            subj: subj,
+            schemesCount: fileSchemeOrder.length,
+            calcTotal: calcTotal,
+            statedTotal: statedTotal,
+            hasStatedTotal: hasStatedTotal,
+            verStatus: verStatus,
+            hasMismatch: hasMismatch,
+            isDuplicateComp: isDuplicateComp,
+            exceeds2Cr: exceeds2Cr
+          },
+          revisedNoteOverwrites: revisedNoteOverwrites,
+          excelDateFixes: excelDateFixes
+        };
+      }
+
+      function buildDynamicIssuesLog(duplicateCompMap, verificationList, allSchemes, revisedNoteOverwrites, excelDateFixes, removedDupCount) {
+        var log = [];
+
+        if (duplicateCompMap.size > 0) {
+          var compList = [];
+          duplicateCompMap.forEach(function (v) {
+            var uniqueFiles = Array.from(new Set(v.fileNos));
+            compList.push(v.compNo + " (" + v.count + "x in " + uniqueFiles.join(", ") + ")");
+          });
+          log.push({
+            category: "1. Duplicate Computer Numbers [WARNING]",
+            affected: compList.join("; "),
+            rootCause: "Entire e-Office inner pages for the same Computer No. were pasted multiple times in the .txt dump.",
+            actionTaken: "Deduplicated by Computer No. in output; click 'Delete All Duplicate Blocks' to purge duplicates and download rectified .txt.",
+            severity: "warning"
+          });
+        } else if (removedDupCount > 0) {
+          log.push({
+            category: "1. Duplicate Computer Number Blocks Purged",
+            affected: removedDupCount + " duplicate block(s) removed by user",
+            rootCause: "User removed duplicate Computer Number block(s) from the loaded file.",
+            actionTaken: "Input blocks rectified and ready for export via 'Download Rectified .txt'.",
+            severity: "ok"
+          });
+        } else {
+          log.push({
+            category: "1. Duplicate Computer Number Check",
+            affected: "None",
+            rootCause: "Checked all extracted Computer Numbers across file blocks.",
+            actionTaken: "All Computer Numbers are unique.",
+            severity: "ok"
+          });
+        }
+
+        var overFiles = verificationList.filter(function (f) { return f.exceeds2Cr; });
+        var overSchemes = allSchemes.filter(function (s) { return s.exceeds2Cr; });
+        if (overFiles.length > 0 || overSchemes.length > 0) {
+          var fileLabels = overFiles.map(function (f) {
+            return f.fileNo + " [Comp: " + (f.compNo || "N/A") + "] (₹" + formatINR(Math.max(f.calcTotal, f.statedTotal)) + ")";
+          });
+          var schLabels = overSchemes.map(function (s) {
+            return s.schID + " (₹" + formatINR(s.amount) + ")";
+          });
+          log.push({
+            category: "2. AA Ceiling > ₹2,00,00,000 [ALERT]",
+            affected: "Files: " + (fileLabels.join(", ") || "None") + " | Schemes: " + (schLabels.join(", ") || "None"),
+            rootCause: "Administrative Approval amount exceeds the ₹2,00,00,000 (₹2 Crore) ceiling threshold.",
+            actionTaken: "Flagged in File Verification, Cleaned Data, and Warning Banner.",
+            severity: "danger"
+          });
+        } else {
+          log.push({
+            category: "2. AA Ceiling (₹2,00,00,000) Check",
+            affected: "None",
+            rootCause: "Verified all file totals and individual scheme AA amounts against ₹2,00,00,000.",
+            actionTaken: "All files and schemes are within ₹2,00,00,000.",
+            severity: "ok"
+          });
+        }
+
+        log.push({
+          category: "3. Revision Table Overwrites (Note #3/#4)",
+          affected: revisedNoteOverwrites + " scheme row(s) updated",
+          rootCause: "Both initial Note #1 and revised Note #3/#4 tables appeared in the same e-Office file.",
+          actionTaken: "Overwrote earlier Note #1 rows with revised Note #3/#4 rows matched by Scheme ID.",
+          severity: "info"
+        });
+
+        log.push({
+          category: "4. Excel Date Auto-Format Repairs",
+          affected: excelDateFixes + " cell(s) restored",
+          rootCause: "Excel auto-converted Sl. No. (e.g. '03-01-1900') and Plot No. (e.g. 'Jan-88') into dates.",
+          actionTaken: "Restored original numeric/fraction strings ('3', '1/88') and preserved as text.",
+          severity: "info"
+        });
+
+        var misFiles = verificationList.filter(function (f) { return f.hasMismatch; });
+        if (misFiles.length > 0) {
+          log.push({
+            category: "5. Incomplete / Mismatched Source Files",
+            affected: misFiles.map(function (f) { return f.fileNo + " [" + (f.compNo || "N/A") + "]"; }).join("; "),
+            rootCause: "Source text truncated before Total row or scheme sum differs from Stated File Total.",
+            actionTaken: "Flagged in File_Verification tab with exact difference.",
+            severity: "warning"
+          });
+        }
+
+        return log;
+      }
+
+      // =========================================================================
+      // 4. UI RENDERING
+      // =========================================================================
+      function renderDashboard() {
+        var verificationList = parsedState.verificationList;
+        var allSchemes = parsedState.allSchemes;
+        var duplicateCompMap = parsedState.duplicateCompMap;
+        var districts = parsedState.districts;
+        var schemeTypes = parsedState.schemeTypes;
+        var issuesLog = parsedState.issuesLog;
+
+        var totalAA = allSchemes.reduce(function (acc, s) { return acc + s.amount; }, 0);
+        var over2CrFiles = verificationList.filter(function (f) { return f.exceeds2Cr; });
+        var over2CrSchemes = allSchemes.filter(function (s) { return s.exceeds2Cr; });
+        var totalThresholdAlerts = over2CrFiles.length + over2CrSchemes.length;
+
+        document.getElementById("kpiUniqueFiles").textContent = parsedState.uniqueFileCount;
+        document.getElementById("kpiRawBlocks").textContent = "From " + parsedState.rawBlockCount + " raw file block(s)";
+        document.getElementById("kpiUniqueSchemes").textContent = allSchemes.length;
+        document.getElementById("kpiDistrictCount").textContent = "Across " + districts.length + " district(s)";
+        document.getElementById("kpiTotalAA").textContent = "₹" + formatINR(totalAA);
+        document.getElementById("kpiTotalAACrore").textContent = "₹" + (totalAA / 10000000).toFixed(2) + " Crore";
+        document.getElementById("kpiDupCompCount").textContent = duplicateCompMap.size;
+        document.getElementById("kpiOver2CrCount").textContent = totalThresholdAlerts;
+
+        var kpiDupCard = document.getElementById("kpiDupCard");
+        var kpiDupVal = document.getElementById("kpiDupCompCount");
+        if (duplicateCompMap.size > 0) {
+          kpiDupCard.className = "kpi-card kpi-warn";
+          kpiDupVal.className = "kpi-value amber";
+        } else {
+          kpiDupCard.className = "kpi-card";
+          kpiDupVal.className = "kpi-value";
+        }
+
+        var kpiThreshCard = document.getElementById("kpiThresholdCard");
+        var kpiThreshVal = document.getElementById("kpiOver2CrCount");
+        if (totalThresholdAlerts > 0) {
+          kpiThreshCard.className = "kpi-card kpi-danger";
+          kpiThreshVal.className = "kpi-value rose";
+        } else {
+          kpiThreshCard.className = "kpi-card";
+          kpiThreshVal.className = "kpi-value";
+        }
+
+        renderWarningBanners(duplicateCompMap, over2CrFiles, over2CrSchemes, verificationList);
+
+        document.getElementById("badgeTabSum").textContent = districts.length;
+        document.getElementById("badgeTabVer").textContent = verificationList.length;
+        document.getElementById("badgeTabData").textContent = allSchemes.length;
+        document.getElementById("badgeTabLog").textContent = issuesLog.length;
+        document.getElementById("badgeTabBlocks").textContent = parsedState.rawBlocks.length;
+
+        var btnTabDel = document.getElementById("btnTabDeleteAllDuplicates");
+        if (btnTabDel) {
+          btnTabDel.disabled = duplicateCompMap.size === 0;
+        }
+
+        var distSel = document.getElementById("filterDistrict");
+        distSel.innerHTML = '<option value="">All Districts (' + districts.length + ')</option>' +
+          districts.slice().sort().map(function (d) {
+            return '<option value="' + escapeHTML(d) + '">' + escapeHTML(d) + '</option>';
+          }).join("");
+
+        var typeSel = document.getElementById("filterSchemeType");
+        typeSel.innerHTML = '<option value="">All Scheme Types (' + schemeTypes.length + ')</option>' +
+          schemeTypes.map(function (t) {
+            return '<option value="' + escapeHTML(t) + '">' + escapeHTML(t) + '</option>';
+          }).join("");
+
+        renderSummaryTable();
+        renderVerificationTable();
+        renderCleanedDataTable();
+        renderIssuesLogTable();
+        renderRawBlocksTable();
+      }
+
+      function renderWarningBanners(duplicateCompMap, over2CrFiles, over2CrSchemes, verificationList) {
+        var dupCard = document.getElementById("dupCompAlertCard");
+        var dupList = document.getElementById("dupCompDetailsList");
+        if (duplicateCompMap.size > 0) {
+          dupCard.classList.remove("hidden");
+          document.getElementById("dupCompBadgeCount").textContent = duplicateCompMap.size + " Duplicate(s)";
+          var itemsHtml = [];
+          duplicateCompMap.forEach(function (info) {
+            var uniqueFiles = Array.from(new Set(info.fileNos));
+            itemsHtml.push(
+              '<div class="alert-item">' +
+                '<div>' +
+                  '<strong>Computer No: ' + escapeHTML(info.compNo) + '</strong>' +
+                  '<div style="color:#475569; margin-top:2px;">File(s): ' + escapeHTML(uniqueFiles.join(", ")) + '</div>' +
+                '</div>' +
+                '<span class="badge badge-warn">Found ' + info.count + 'x (Block #' + info.blockIndices.join(", #") + ')</span>' +
+              '</div>'
+            );
+          });
+          dupList.innerHTML = itemsHtml.join("");
+        } else {
+          dupCard.classList.add("hidden");
+        }
+
+        var aaCard = document.getElementById("aaLimitAlertCard");
+        var aaList = document.getElementById("aaLimitDetailsList");
+        var totalOver = over2CrFiles.length + over2CrSchemes.length;
+        if (totalOver > 0) {
+          aaCard.classList.remove("hidden");
+          document.getElementById("aaLimitBadgeCount").textContent = totalOver + " Breach(es) > ₹2,00,00,000";
+          var cardsHtml = [];
+
+          over2CrFiles.forEach(function (f) {
+            var maxAmt = Math.max(f.calcTotal, f.statedTotal);
+            cardsHtml.push(
+              '<div class="alert-item">' +
+                '<div>' +
+                  '<span class="badge badge-danger" style="margin-right:6px;">File Total</span>' +
+                  '<strong>' + escapeHTML(f.fileNo) + '</strong>' +
+                  '<div style="color:#475569; margin-top:2px;">Comp. No: ' + escapeHTML(f.compNo || "N/A") + ' • ' + escapeHTML(f.subj) + '</div>' +
+                '</div>' +
+                '<div class="text-right nowrap">' +
+                  '<div class="text-danger" style="font-size:14px;">₹' + formatINR(maxAmt) + '</div>' +
+                  '<div style="font-size:11px; color:#be123c;">₹' + (maxAmt / 10000000).toFixed(2) + ' Cr</div>' +
+                '</div>' +
+              '</div>'
+            );
+          });
+
+          over2CrSchemes.forEach(function (s) {
+            cardsHtml.push(
+              '<div class="alert-item">' +
+                '<div>' +
+                  '<span class="badge badge-blue" style="margin-right:6px;">Single Scheme</span>' +
+                  '<strong>' + escapeHTML(s.schID) + '</strong>' +
+                  '<div style="color:#475569; margin-top:2px;">' + escapeHTML(s.schName) + ' (' + escapeHTML(s.district) + ')</div>' +
+                '</div>' +
+                '<div class="text-right nowrap">' +
+                  '<div class="text-danger" style="font-size:14px;">₹' + formatINR(s.amount) + '</div>' +
+                  '<div style="font-size:11px; color:#be123c;">₹' + (s.amount / 10000000).toFixed(2) + ' Cr</div>' +
+                '</div>' +
+              '</div>'
+            );
+          });
+
+          aaList.innerHTML = cardsHtml.join("");
+        } else {
+          aaCard.classList.add("hidden");
+        }
+
+        var misCard = document.getElementById("mismatchAlertCard");
+        var misList = document.getElementById("mismatchDetailsList");
+        var mismatched = verificationList.filter(function (f) { return f.hasMismatch; });
+        if (mismatched.length > 0) {
+          misCard.classList.remove("hidden");
+          document.getElementById("mismatchBadgeCount").textContent = mismatched.length + " File(s)";
+          misList.innerHTML = mismatched.map(function (f) {
+            return (
+              '<div class="alert-item">' +
+                '<div>' +
+                  '<strong>' + escapeHTML(f.fileNo) + ' (Comp: ' + escapeHTML(f.compNo || "N/A") + ')</strong>' +
+                  '<div style="color:#9a3412; margin-top:2px;">' + escapeHTML(f.verStatus) + '</div>' +
+                '</div>' +
+              '</div>'
+            );
+          }).join("");
+        } else {
+          misCard.classList.add("hidden");
+        }
+      }
+
+      function renderSummaryTable() {
+        var districts = parsedState.districts.slice().sort();
+        var types = parsedState.schemeTypes;
+        var schemes = parsedState.allSchemes;
+
+        var thead = document.getElementById("theadSummary");
+        var tbody = document.getElementById("tbodySummary");
+        var tfoot = document.getElementById("tfootSummary");
+
+        var headCells = [
+          '<th class="text-center" style="width:64px;">Sl. No.</th>',
+          '<th>District</th>'
+        ];
+        types.forEach(function (t) {
+          headCells.push('<th class="text-right">' + escapeHTML(t) + ' (₹)</th>');
+        });
+        headCells.push('<th class="text-right" style="background:#172554;">Total AA Amount (₹)</th>');
+        headCells.push('<th class="text-center" style="background:#172554;">No. of Schemes</th>');
+        thead.innerHTML = "<tr>" + headCells.join("") + "</tr>";
+
+        var colTotals = new Array(types.length).fill(0);
+        var grandTotalAA = 0;
+        var grandTotalCount = 0;
+
+        tbody.innerHTML = districts.map(function (dist, idx) {
+          var rowSum = 0;
+          var typeCells = types.map(function (t, tIdx) {
+            var sumVal = schemes
+              .filter(function (s) { return s.district === dist && s.type === t; })
+              .reduce(function (acc, s) { return acc + s.amount; }, 0);
+            colTotals[tIdx] += sumVal;
+            rowSum += sumVal;
+            return '<td class="text-right nowrap">' + (sumVal > 0 ? formatINR(sumVal) : "-") + '</td>';
+          });
+
+          var rowCount = schemes.filter(function (s) { return s.district === dist; }).length;
+          grandTotalAA += rowSum;
+          grandTotalCount += rowCount;
+
+          return (
+            '<tr>' +
+              '<td class="text-center">' + (idx + 1) + '</td>' +
+              '<td class="font-bold nowrap">' + escapeHTML(dist) + '</td>' +
+              typeCells.join("") +
+              '<td class="text-right text-blue nowrap" style="background:#eff6ff;">₹' + formatINR(rowSum) + '</td>' +
+              '<td class="text-center font-bold" style="background:#eff6ff;">' + rowCount + '</td>' +
+            '</tr>'
+          );
+        }).join("");
+
+        var footCells = [
+          '<td></td>',
+          '<td>GRAND TOTAL</td>'
+        ];
+        colTotals.forEach(function (val) {
+          footCells.push('<td class="text-right nowrap">' + formatINR(val) + '</td>');
+        });
+        footCells.push('<td class="text-right nowrap">₹' + formatINR(grandTotalAA) + '</td>');
+        footCells.push('<td class="text-center">' + grandTotalCount + '</td>');
+        tfoot.innerHTML = "<tr>" + footCells.join("") + "</tr>";
+      }
+
+      function renderVerificationTable() {
+        var alertsOnly = document.getElementById("chkVerAlertsOnly").checked;
+        var rows = parsedState.verificationList;
+        if (alertsOnly) {
+          rows = rows.filter(function (r) { return r.isDuplicateComp || r.exceeds2Cr || r.hasMismatch; });
+        }
+
+        var tbody = document.getElementById("tbodyVerification");
+        var tfoot = document.getElementById("tfootVerification");
+
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:28px;">No files match the current filter.</td></tr>';
+          tfoot.innerHTML = "";
+          return;
+        }
+
+        var totSchemes = 0;
+        var totCalc = 0;
+        var totStated = 0;
+
+        tbody.innerHTML = rows.map(function (r) {
+          totSchemes += r.schemesCount;
+          totCalc += r.calcTotal;
+          totStated += r.statedTotal;
+
+          var badges = [];
+          if (r.verStatus === "OK") {
+            badges.push('<span class="badge badge-ok">OK</span>');
+          } else {
+            badges.push('<span class="badge badge-orange">' + escapeHTML(r.verStatus) + '</span>');
+          }
+          if (r.isDuplicateComp) {
+            badges.push('<span class="badge badge-warn">⚠ Duplicate Comp. No.</span>');
+          }
+          if (r.exceeds2Cr) {
+            badges.push('<span class="badge badge-danger">🚨 Exceeds ₹2 Cr</span>');
+          }
+
+          var rowCls = r.exceeds2Cr ? "row-danger" : (r.isDuplicateComp ? "row-warning" : "");
+
+          return (
+            '<tr class="' + rowCls + '">' +
+              '<td class="font-bold nowrap">' + escapeHTML(r.fileNo) + '</td>' +
+              '<td class="text-center text-blue nowrap">' + escapeHTML(r.compNo || "-") + '</td>' +
+              '<td>' + escapeHTML(r.subj) + '</td>' +
+              '<td class="text-center font-bold">' + r.schemesCount + '</td>' +
+              '<td class="text-right nowrap ' + (r.calcTotal > AA_THRESHOLD_LIMIT ? "text-danger" : "font-bold") + '">' + formatINR(r.calcTotal) + '</td>' +
+              '<td class="text-right nowrap ' + (r.statedTotal > AA_THRESHOLD_LIMIT ? "text-danger" : "") + '">' + (r.hasStatedTotal ? formatINR(r.statedTotal) : "-") + '</td>' +
+              '<td><div style="display:flex; flex-wrap:wrap; gap:5px;">' + badges.join("") + '</div></td>' +
+            '</tr>'
+          );
+        }).join("");
+
+        tfoot.innerHTML =
+          '<tr>' +
+            '<td>GRAND TOTAL (' + rows.length + ' FILES)</td>' +
+            '<td class="text-center">' + rows.length + ' Comp. Nos.</td>' +
+            '<td></td>' +
+            '<td class="text-center">' + totSchemes + '</td>' +
+            '<td class="text-right">₹' + formatINR(totCalc) + '</td>' +
+            '<td class="text-right">₹' + formatINR(totStated) + '</td>' +
+            '<td></td>' +
+          '</tr>';
+      }
+
+      function renderCleanedDataTable() {
+        var searchQ = document.getElementById("searchSchemeInput").value.trim().toLowerCase();
+        var distFilter = document.getElementById("filterDistrict").value;
+        var typeFilter = document.getElementById("filterSchemeType").value;
+        var over2CrOnly = document.getElementById("chkSchemeOver2CrOnly").checked;
+
+        var filtered = parsedState.allSchemes.filter(function (s) {
+          if (distFilter && s.district !== distFilter) return false;
+          if (typeFilter && s.type !== typeFilter) return false;
+          if (over2CrOnly && !s.exceeds2Cr) return false;
+          if (searchQ) {
+            var hay = (s.fileNo + " " + s.compNo + " " + s.schID + " " + s.schName + " " + s.district + " " + s.block + " " + s.gp + " " + s.mouza).toLowerCase();
+            if (hay.indexOf(searchQ) === -1) return false;
+          }
+          return true;
+        });
+
+        if (parsedState.sortCol) {
+          var col = parsedState.sortCol;
+          var dir = parsedState.sortAsc ? 1 : -1;
+          filtered = filtered.slice().sort(function (a, b) {
+            var vA = a[col];
+            var vB = b[col];
+            if (typeof vA === "number" && typeof vB === "number") return (vA - vB) * dir;
+            return String(vA || "").localeCompare(String(vB || ""), undefined, { numeric: true }) * dir;
+          });
+        }
+
+        document.getElementById("cleanedCountLabel").textContent =
+          "Showing " + filtered.length + " of " + parsedState.allSchemes.length + " unique schemes";
+
+        var tbody = document.getElementById("tbodyCleanedData");
+        if (filtered.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="15" class="text-center" style="padding:28px;">No schemes match the active search or filters.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = filtered.map(function (s) {
+          var rowCls = s.exceeds2Cr ? "row-danger" : "";
+          return (
+            '<tr class="' + rowCls + '">' +
+              '<td class="nowrap font-bold">' + escapeHTML(s.fileNo) + '</td>' +
+              '<td class="text-center nowrap text-blue">' + escapeHTML(s.compNo) + '</td>' +
+              '<td class="text-center nowrap">' + escapeHTML(s.slNo) + '</td>' +
+              '<td class="nowrap font-bold">' + escapeHTML(s.schID) + '</td>' +
+              '<td>' + escapeHTML(s.schName) + '</td>' +
+              '<td class="nowrap"><span class="badge badge-blue">' + escapeHTML(s.type) + '</span></td>' +
+              '<td class="nowrap font-bold">' + escapeHTML(s.district) + '</td>' +
+              '<td class="nowrap">' + escapeHTML(s.block) + '</td>' +
+              '<td class="nowrap">' + escapeHTML(s.gp) + '</td>' +
+              '<td class="nowrap">' + escapeHTML(s.mouza) + '</td>' +
+              '<td class="text-center nowrap">' + escapeHTML(s.jl) + '</td>' +
+              '<td class="text-center nowrap">' + escapeHTML(s.plot) + '</td>' +
+              '<td class="text-right nowrap ' + (s.exceeds2Cr ? "text-danger" : "font-bold") + '">' +
+                formatINR(s.amount) +
+                (s.exceeds2Cr ? ' <span class="badge badge-danger">&gt;2Cr</span>' : "") +
+              '</td>' +
+              '<td class="nowrap">' + escapeHTML(s.treasury) + '</td>' +
+              '<td class="nowrap">' + escapeHTML(s.ddo) + '</td>' +
+            '</tr>'
+          );
+        }).join("");
+      }
+
+      function renderIssuesLogTable() {
+        var tbody = document.getElementById("tbodyIssuesLog");
+        tbody.innerHTML = parsedState.issuesLog.map(function (item) {
+          var rowCls = "";
+          var badgeCls = "badge-blue";
+          if (item.severity === "warning") {
+            rowCls = "row-warning";
+            badgeCls = "badge-warn";
+          } else if (item.severity === "danger") {
+            rowCls = "row-danger";
+            badgeCls = "badge-danger";
+          } else if (item.severity === "ok") {
+            badgeCls = "badge-ok";
+          }
+
+          return (
+            '<tr class="' + rowCls + '">' +
+              '<td><span class="badge ' + badgeCls + '">' + escapeHTML(item.category) + '</span></td>' +
+              '<td class="font-bold">' + escapeHTML(item.affected) + '</td>' +
+              '<td>' + escapeHTML(item.rootCause) + '</td>' +
+              '<td>' + escapeHTML(item.actionTaken) + '</td>' +
+            '</tr>'
+          );
+        }).join("");
+      }
+
+      // =========================================================================
+      // 5. RAW BLOCKS, DUPLICATE DELETION & RECTIFIED .TXT EXPORT
+      // =========================================================================
+      function renderRawBlocksTable() {
+        var tbody = document.getElementById("tbodyRawBlocks");
+        if (!tbody) return;
+
+        var blocks = parsedState.rawBlocks;
+        if (blocks.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:28px;">No raw file blocks loaded.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = blocks.map(function (blk) {
+          var statusBadge = "";
+          var rowCls = "";
+
+          if (!blk.isDuplicate) {
+            statusBadge = '<span class="badge badge-ok">Unique Block</span>';
+          } else if (blk.isLatestSnapshot) {
+            rowCls = "row-info";
+            statusBadge = '<span class="badge badge-blue">Duplicate (' + blk.occurrenceNum + ' of ' + blk.totalOccurrences + ') • Latest Retained</span>';
+          } else {
+            rowCls = "row-warning";
+            statusBadge = '<span class="badge badge-warn">⚠ Duplicate (' + blk.occurrenceNum + ' of ' + blk.totalOccurrences + ') • Redundant</span>';
+          }
+
+          var actionBtn = blk.isDuplicate
+            ? '<button type="button" data-del-block="' + blk.index + '" class="btn btn-rose btn-del-single-block">Delete Block</button>'
+            : '<span style="font-size:12px; color:#94a3b8;">Protected</span>';
+
+          return (
+            '<tr class="' + rowCls + '">' +
+              '<td class="text-center font-bold">#' + blk.blockNumber + '</td>' +
+              '<td class="text-center text-blue nowrap">' + escapeHTML(blk.compNo || "-") + '</td>' +
+              '<td class="font-bold nowrap">' + escapeHTML(blk.fileNo) + '</td>' +
+              '<td>' + escapeHTML(blk.subj || "-") + '</td>' +
+              '<td class="text-center">' + blk.lines.length + '</td>' +
+              '<td>' + statusBadge + '</td>' +
+              '<td class="text-center nowrap">' + actionBtn + '</td>' +
+            '</tr>'
+          );
+        }).join("");
+      }
+
+      function rebuildContentFromBlocks(blockList) {
+        return blockList.map(function (b) {
+          return b.lines.join("\n").replace(/\n+$/, "");
+        }).join("\n\n") + "\n";
+      }
+
+      function deleteSingleRawBlock(blockIdx) {
+        var target = parsedState.rawBlocks.find(function (b) { return b.index === blockIdx; });
+        if (!target) return;
+
+        if (!target.isDuplicate) {
+          showToast("warning", "Cannot Delete Unique Block", "Computer No. " + (target.compNo || target.fileNo) + " only has 1 block remaining.");
+          return;
+        }
+
+        var remainingBlocks = parsedState.rawBlocks.filter(function (b) { return b.index !== blockIdx; });
+        var newContent = rebuildContentFromBlocks(remainingBlocks);
+        var totalRemoved = parsedState.removedDuplicateCount + 1;
+
+        document.getElementById("fileStatusBadge").textContent =
+          "Rectified: " + parsedState.sourceFileName + " (" + totalRemoved + " duplicate block(s) removed)";
+        runEOfficeParser(newContent, parsedState.sourceFileName, parsedState.encodingDetected, totalRemoved);
+      }
+
+      function deleteAllDuplicateBlocks() {
+        var blocks = parsedState.rawBlocks;
+        var duplicatesToRemove = blocks.filter(function (b) { return b.isDuplicate && !b.isLatestSnapshot; });
+
+        if (duplicatesToRemove.length === 0) {
+          showToast("success", "No Duplicate Blocks Found", "All Computer Number blocks in the current dataset are already unique.");
+          return;
+        }
+
+        var keptBlocks = blocks.filter(function (b) { return !b.isDuplicate || b.isLatestSnapshot; });
+        var newContent = rebuildContentFromBlocks(keptBlocks);
+        var totalRemoved = parsedState.removedDuplicateCount + duplicatesToRemove.length;
+
+        document.getElementById("fileStatusBadge").textContent =
+          "Rectified: " + parsedState.sourceFileName + " (" + totalRemoved + " duplicate block(s) removed)";
+        runEOfficeParser(newContent, parsedState.sourceFileName, parsedState.encodingDetected, totalRemoved);
+      }
+
+      function downloadRectifiedTxt() {
+        if (!parsedState.rawBlocks || parsedState.rawBlocks.length === 0) {
+          showToast("error", "No Data Available", "Please load an e-Office .txt file first.");
+          return;
+        }
+
+        var keptBlocks = parsedState.rawBlocks.filter(function (b) { return !b.isDuplicate || b.isLatestSnapshot; });
+        var rectifiedText = rebuildContentFromBlocks(keptBlocks);
+
+        var blob = new Blob([rectifiedText], { type: "text/plain;charset=utf-8" });
+        var baseName = (parsedState.sourceFileName || "eoffice_dump").replace(/\.txt$/i, "");
+        triggerBlobDownload(blob, baseName + "_rectified.txt");
+
+        var strippedCount = parsedState.rawBlocks.length - keptBlocks.length;
+        showToast(
+          "success",
+          "Rectified Input File Downloaded",
+          "Saved " + baseName + "_rectified.txt with " + keptBlocks.length + " unique file block(s)" +
+          (strippedCount > 0 ? " (" + strippedCount + " duplicate block(s) stripped)" : "") + "."
+        );
+      }
+
+      // =========================================================================
+      // 6. STYLED MULTI-SHEET EXCEL EXPORT (LIVE FORMULAS + FULL CELL BORDERS)
+      // =========================================================================
+      function buildWorkbookDataArrays() {
+        var numSchemes = parsedState.allSchemes.length;
+        var maxDataRow = numSchemes + 1;
+
+        // Sheet 1: District_Scheme_Summary (with live SUMIFS, SUM & COUNTIF formulas)
+        var sumHeader = ["Sl. No.", "District"].concat(
+          parsedState.schemeTypes.map(function (t) { return t + " (Rs.)"; }),
+          ["Total AA Amount (Rs.)", "No. of Schemes"]
+        );
+        var sumRows = [
+          ["WBADMIP PHASE-II: DISTRICT-WISE & SCHEME-WISE ADMINISTRATIVE APPROVAL SUMMARY"],
+          [],
+          sumHeader
+        ];
+
+        var sortedDists = parsedState.districts.slice().sort();
+        var colSums = new Array(parsedState.schemeTypes.length).fill(0);
+        var grandAA = 0;
+        var grandCnt = 0;
+
+        sortedDists.forEach(function (dist, idx) {
+          var excelRow = idx + 4; // Rows 1..3 are banner, spacer, header
+          var rSum = 0;
+          var rVals = parsedState.schemeTypes.map(function (t, tIdx) {
+            var v = parsedState.allSchemes
+              .filter(function (s) { return s.district === dist && s.type === t; })
+              .reduce(function (a, s) { return a + s.amount; }, 0);
+            colSums[tIdx] += v;
+            rSum += v;
+            var safeType = String(t).replace(/"/g, '""');
+            return {
+              v: v,
+              f: 'SUMIFS(Cleaned_Scheme_Data!$M$2:$M$' + maxDataRow + ',Cleaned_Scheme_Data!$G$2:$G$' + maxDataRow + ',$B' + excelRow + ',Cleaned_Scheme_Data!$F$2:$F$' + maxDataRow + ',"' + safeType + '")'
+            };
+          });
+          var cnt = parsedState.allSchemes.filter(function (s) { return s.district === dist; }).length;
+          grandAA += rSum;
+          grandCnt += cnt;
+
+          var lastTypeColLetter = colIndexToLetter(1 + parsedState.schemeTypes.length);
+          var totFormula = parsedState.schemeTypes.length > 0
+            ? "SUM(C" + excelRow + ":" + lastTypeColLetter + excelRow + ")"
+            : "0";
+          var cntFormula = "COUNTIF(Cleaned_Scheme_Data!$G$2:$G$" + maxDataRow + ",$B" + excelRow + ")";
+
+          sumRows.push([idx + 1, dist].concat(
+            rVals,
+            [{ v: rSum, f: totFormula }, { v: cnt, f: cntFormula }]
+          ));
+        });
+
+        var lastDistExcelRow = sortedDists.length + 3;
+        var grandTotalExcelRow = sortedDists.length + 4;
+        var grandCells = colSums.map(function (val, tIdx) {
+          var colLtr = colIndexToLetter(2 + tIdx);
+          return {
+            v: val,
+            f: sortedDists.length > 0 ? "SUM(" + colLtr + "4:" + colLtr + lastDistExcelRow + ")" : "0"
+          };
+        });
+        var totColLtr = colIndexToLetter(2 + parsedState.schemeTypes.length);
+        var cntColLtr = colIndexToLetter(3 + parsedState.schemeTypes.length);
+        grandCells.push({
+          v: grandAA,
+          f: sortedDists.length > 0 ? "SUM(" + totColLtr + "4:" + totColLtr + lastDistExcelRow + ")" : "0"
+        });
+        grandCells.push({
+          v: grandCnt,
+          f: sortedDists.length > 0 ? "SUM(" + cntColLtr + "4:" + cntColLtr + lastDistExcelRow + ")" : "0"
+        });
+
+        sumRows.push(["", "GRAND TOTAL"].concat(grandCells));
+
+        // Sheet 2: File_Verification
+        var verTotSchemes = 0;
+        var verTotCalc = 0;
+        var verTotStated = 0;
+        var verRows = [
+          ["File No.", "Computer No.", "Subject", "Schemes Extracted", "Calculated Total (Rs.)", "Stated File Total (Rs.)", "Verification Status", "Duplicate Comp. No. Warning", "Exceeds Rs. 2,00,00,000 Alert"]
+        ];
+        parsedState.verificationList.forEach(function (v) {
+          var statedVal = v.hasStatedTotal ? v.statedTotal : 0;
+          verTotSchemes += v.schemesCount;
+          verTotCalc += v.calcTotal;
+          verTotStated += statedVal;
+          verRows.push([
+            v.fileNo,
+            v.compNo ? Number(v.compNo) || v.compNo : "",
+            v.subj,
+            v.schemesCount,
+            v.calcTotal,
+            statedVal,
+            v.verStatus,
+            v.isDuplicateComp ? "YES - Duplicate Computer No." : "No",
+            v.exceeds2Cr ? "YES - Exceeds Rs. 2,00,00,000" : "No"
+          ]);
+        });
+        var lastVerRow = parsedState.verificationList.length + 1;
+        verRows.push([
+          "GRAND TOTAL (" + parsedState.verificationList.length + " FILES)",
+          parsedState.verificationList.length + " Comp. Nos.",
+          "",
+          { v: verTotSchemes, f: lastVerRow >= 2 ? "SUM(D2:D" + lastVerRow + ")" : "0" },
+          { v: verTotCalc, f: lastVerRow >= 2 ? "SUM(E2:E" + lastVerRow + ")" : "0" },
+          { v: verTotStated, f: lastVerRow >= 2 ? "SUM(F2:F" + lastVerRow + ")" : "0" },
+          "",
+          "",
+          ""
+        ]);
+
+        // Sheet 3: Cleaned_Scheme_Data
+        var cleanTotAA = 0;
+        var cleanRows = [
+          ["File No.", "Computer No.", "Sl. No.", "Scheme ID", "Name of the Scheme", "Type of Scheme", "District", "Block", "GP", "Mouza", "J.L. No.", "Plot No.", "Administrative Approval (Rs.)", "Name of the Treasury", "Name of the D.D.O", "Exceeds Rs. 2 Cr Alert"]
+        ];
+        parsedState.allSchemes.forEach(function (s) {
+          cleanTotAA += s.amount;
+          cleanRows.push([
+            s.fileNo,
+            s.compNo ? Number(s.compNo) || s.compNo : "",
+            String(s.slNo),
+            s.schID,
+            s.schName,
+            s.type,
+            s.district,
+            s.block,
+            s.gp,
+            s.mouza,
+            String(s.jl),
+            String(s.plot),
+            s.amount,
+            s.treasury,
+            s.ddo,
+            s.exceeds2Cr ? "YES (> Rs. 2,00,00,000)" : "No"
+          ]);
+        });
+        cleanRows.push([
+          "GRAND TOTAL (" + numSchemes + " SCHEMES)",
+          "", "", "", "", "", "", "", "", "", "", "",
+          { v: cleanTotAA, f: maxDataRow >= 2 ? "SUM(M2:M" + maxDataRow + ")" : "0" },
+          "", "", ""
+        ]);
+
+        // Sheet 4: Issues_Fixed_Log
+        var logRows = [
+          ["Issue Category", "Affected File(s)", "Root Cause in Raw .txt", "Action Taken"]
+        ];
+        parsedState.issuesLog.forEach(function (l) {
+          logRows.push([l.category, l.affected, l.rootCause, l.actionTaken]);
+        });
+
+        return {
+          District_Scheme_Summary: sumRows,
+          File_Verification: verRows,
+          Cleaned_Scheme_Data: cleanRows,
+          Issues_Fixed_Log: logRows
+        };
+      }
+
+      function createStyledWorksheet(sheetName, rows) {
+        // Convert formula objects into plain values first for aoa_to_sheet, then attach formulas & styles
+        var plainRows = rows.map(function (row) {
+          return row.map(function (cell) {
+            if (cell && typeof cell === "object" && "v" in cell) return cell.v;
+            return cell;
+          });
+        });
+
+        var ws = window.XLSX.utils.aoa_to_sheet(plainRows);
+        var maxCols = 0;
+        rows.forEach(function (r) { if (r.length > maxCols) maxCols = r.length; });
+
+        var thinBorder = {
+          top: { style: "thin", color: { rgb: "94A3B8" } },
+          bottom: { style: "thin", color: { rgb: "94A3B8" } },
+          left: { style: "thin", color: { rgb: "94A3B8" } },
+          right: { style: "thin", color: { rgb: "94A3B8" } }
+        };
+
+        var totalBorder = {
+          top: { style: "medium", color: { rgb: "1E3A8A" } },
+          bottom: { style: "double", color: { rgb: "1E3A8A" } },
+          left: { style: "thin", color: { rgb: "94A3B8" } },
+          right: { style: "thin", color: { rgb: "94A3B8" } }
+        };
+
+        var headerHex = "1E3A8A";
+        var totalFillHex = "DBEAFE";
+        var totalFontHex = "1E3A8A";
+        if (sheetName === "File_Verification") {
+          headerHex = "0F766E";
+          totalFillHex = "CCFBF1";
+          totalFontHex = "115E59";
+        } else if (sheetName === "Cleaned_Scheme_Data") {
+          headerHex = "312E81";
+          totalFillHex = "E0E7FF";
+          totalFontHex = "312E81";
+        } else if (sheetName === "Issues_Fixed_Log") {
+          headerHex = "1E293B";
+          totalFillHex = "E2E8F0";
+          totalFontHex = "0F172A";
+        }
+
+        var headerRowIdx = sheetName === "District_Scheme_Summary" ? 2 : 0;
+        var hasTotalRow = sheetName !== "Issues_Fixed_Log";
+        var totalRowIdx = hasTotalRow ? rows.length - 1 : -1;
+
+        var rowHeights = [];
+        var colWidths = new Array(maxCols).fill(14);
+
+        for (var r = 0; r < rows.length; r++) {
+          if (sheetName === "District_Scheme_Summary" && r === 1) {
+            rowHeights.push({ hpt: 10 });
+            continue;
+          }
+
+          if (sheetName === "District_Scheme_Summary" && r === 0) {
+            rowHeights.push({ hpt: 30 });
+            for (var tc = 0; tc < maxCols; tc++) {
+              var tAddr = window.XLSX.utils.encode_cell({ r: 0, c: tc });
+              if (!ws[tAddr]) ws[tAddr] = { t: "s", v: "" };
+              ws[tAddr].s = {
+                font: { name: "Calibri", sz: 13, bold: true, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: "172554" } },
+                alignment: { horizontal: "center", vertical: "center" },
+                border: thinBorder
+              };
+            }
+            continue;
+          }
+
+          var isHeader = r === headerRowIdx;
+          var isTotal = r === totalRowIdx;
+          rowHeights.push({ hpt: isHeader ? 30 : isTotal ? 25 : 21 });
+
+          var rowArr = rows[r] || [];
+          var rowPlainJoined = plainRows[r].join(" ");
+          var rowHas2CrAlert = !isHeader && !isTotal && (rowPlainJoined.indexOf("YES (") !== -1 || rowPlainJoined.indexOf("Exceeds Rs. 2,00,00,000") !== -1);
+          var rowHasDupWarn = !isHeader && !isTotal && rowPlainJoined.indexOf("Duplicate Computer No.") !== -1;
+
+          for (var c = 0; c < maxCols; c++) {
+            var addr = window.XLSX.utils.encode_cell({ r: r, c: c });
+            if (!ws[addr]) {
+              ws[addr] = { t: "s", v: "" };
+            }
+            var rawItem = c < rowArr.length ? rowArr[c] : "";
+            if (rawItem && typeof rawItem === "object" && rawItem.f) {
+              ws[addr].f = rawItem.f;
+              ws[addr].t = "n";
+              ws[addr].v = rawItem.v;
+            }
+
+            var cell = ws[addr];
+            var valStr = String(cell.v == null ? "" : cell.v);
+
+            if (!isHeader || c > 0) {
+              var estWidth = Math.min(48, Math.max(12, valStr.length + 4));
+              if (estWidth > colWidths[c]) colWidths[c] = estWidth;
+            }
+
+            if (isHeader) {
+              var colHeaderBg = headerHex;
+              if (sheetName === "District_Scheme_Summary" && c >= maxCols - 2) {
+                colHeaderBg = "172554";
+              }
+              cell.s = {
+                font: { name: "Calibri", sz: 11, bold: true, color: { rgb: "FFFFFF" } },
+                fill: { fgColor: { rgb: colHeaderBg } },
+                alignment: { horizontal: "center", vertical: "center", wrapText: true },
+                border: thinBorder
+              };
+            } else if (isTotal) {
+              var totAlign = typeof cell.v === "number" ? "right" : (c === 0 ? "left" : "center");
+              cell.s = {
+                font: { name: "Calibri", sz: 11, bold: true, color: { rgb: totalFontHex } },
+                fill: { fgColor: { rgb: totalFillHex } },
+                alignment: { horizontal: totAlign, vertical: "center" },
+                border: totalBorder,
+                numFmt: typeof cell.v === "number" ? "#,##0" : undefined
+              };
+            } else {
+              var bgHex = (r % 2 === 1) ? "FFFFFF" : "F8FAFC";
+              var fgHex = "1E293B";
+              var isBold = false;
+
+              if (rowHas2CrAlert) {
+                bgHex = "FFE4E6";
+                if (valStr.indexOf("YES") === 0 || (typeof cell.v === "number" && cell.v > AA_THRESHOLD_LIMIT)) {
+                  fgHex = "BE123C";
+                  isBold = true;
+                }
+              } else if (rowHasDupWarn) {
+                bgHex = "FEF3C7";
+                if (valStr.indexOf("YES") === 0) {
+                  fgHex = "B45309";
+                  isBold = true;
+                }
+              } else if (valStr === "OK") {
+                bgHex = "DCFCE7";
+                fgHex = "166534";
+                isBold = true;
+              } else if (valStr.indexOf("INCOMPLETE") === 0 || valStr.indexOf("MISMATCH") === 0) {
+                bgHex = "FFEDD5";
+                fgHex = "9A3412";
+                isBold = true;
+              }
+
+              if (sheetName === "District_Scheme_Summary") {
+                if (c === 1) isBold = true;
+                if (c === maxCols - 2) {
+                  bgHex = "EFF6FF";
+                  fgHex = "1E3A8A";
+                  isBold = true;
+                }
+              }
+
+              var hAlign = "left";
+              var numFmt;
+              if (sheetName === "District_Scheme_Summary") {
+                if (c === 0 || c === maxCols - 1) hAlign = "center";
+                else if (c >= 2) { hAlign = "right"; numFmt = "#,##0"; }
+              } else if (sheetName === "File_Verification") {
+                if (c === 1 || c === 3) hAlign = "center";
+                else if (c === 4 || c === 5) { hAlign = "right"; numFmt = "#,##0"; }
+                if (c === 1) numFmt = "0";
+              } else if (sheetName === "Cleaned_Scheme_Data") {
+                if (c === 1 || c === 2 || c === 10 || c === 11) hAlign = "center";
+                else if (c === 12) { hAlign = "right"; numFmt = "#,##0"; }
+                if (c === 1) numFmt = "0";
+              }
+
+              cell.s = {
+                font: { name: "Calibri", sz: 10, bold: isBold, color: { rgb: fgHex } },
+                fill: { fgColor: { rgb: bgHex } },
+                alignment: {
+                  horizontal: hAlign,
+                  vertical: "center",
+                  wrapText: sheetName === "Issues_Fixed_Log"
+                },
+                border: thinBorder,
+                numFmt: numFmt
+              };
+            }
+          }
+        }
+
+        if (sheetName === "District_Scheme_Summary" && maxCols > 1) {
+          ws["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: maxCols - 1 } }];
+        }
+
+        ws["!rows"] = rowHeights;
+        ws["!cols"] = colWidths.map(function (w) { return { wch: w }; });
+        return ws;
+      }
+
+      function exportToExcel() {
+        if (!parsedState.allSchemes.length) return;
+        var sheetsData = buildWorkbookDataArrays();
+        var baseName = (parsedState.sourceFileName || "eOffice_Reconciled").replace(/\.txt$/i, "");
+
+        if (typeof window.XLSX !== "undefined" && window.XLSX.utils) {
+          var wb = window.XLSX.utils.book_new();
+          Object.keys(sheetsData).forEach(function (sheetName) {
+            var ws = createStyledWorksheet(sheetName, sheetsData[sheetName]);
+            window.XLSX.utils.book_append_sheet(wb, ws, sheetName);
+          });
+          window.XLSX.writeFile(wb, baseName + "_Reconciled.xlsx");
+          showToast("success", "Styled Excel Workbook Exported", "Downloaded " + baseName + "_Reconciled.xlsx with colorful headers, styled totals, live formulas, and borders on every cell.");
+          return;
+        }
+
+        // Offline / Sandboxed Fallback: Multi-Sheet SpreadsheetML XML (.xls) with colorful headers, totals & full borders
+        var xmlParts = [
+          '<?xml version="1.0"?>',
+          '<?mso-application progid="Excel.Sheet"?>',
+          '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">',
+          '<Styles>',
+          '<Style ss:ID="Default" ss:Name="Normal"><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1E293B"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/></Borders></Style>',
+          '<Style ss:ID="TitleBanner"><Font ss:FontName="Calibri" ss:Size="13" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#172554" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/></Borders></Style>',
+          '<Style ss:ID="HeaderBlue"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E3A8A" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/></Borders></Style>',
+          '<Style ss:ID="HeaderTeal"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0F766E" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/></Borders></Style>',
+          '<Style ss:ID="TotalRow"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#1E3A8A"/><Interior ss:Color="#DBEAFE" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Double" ss:Weight="2" ss:Color="#1E3A8A"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="2" ss:Color="#1E3A8A"/></Borders></Style>',
+          '<Style ss:ID="ZebraRow"><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#1E293B"/><Interior ss:Color="#F8FAFC" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/></Borders></Style>',
+          '<Style ss:ID="AlertDanger"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#BE123C"/><Interior ss:Color="#FFE4E6" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/></Borders></Style>',
+          '<Style ss:ID="AlertWarn"><Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#B45309"/><Interior ss:Color="#FEF3C7" ss:Pattern="Solid"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#94A3B8"/></Borders></Style>',
+          '</Styles>'
+        ];
+
+        Object.keys(sheetsData).forEach(function (sheetName) {
+          var rows = sheetsData[sheetName];
+          var headerIdx = sheetName === "District_Scheme_Summary" ? 2 : 0;
+          var totalIdx = sheetName !== "Issues_Fixed_Log" ? rows.length - 1 : -1;
+          var hdrStyle = sheetName === "File_Verification" ? "HeaderTeal" : "HeaderBlue";
+          var colCount = rows[headerIdx] ? rows[headerIdx].length : 1;
+
+          xmlParts.push('<Worksheet ss:Name="' + escapeHTML(sheetName) + '"><Table>');
+          rows.forEach(function (row, rIdx) {
+            if (sheetName === "District_Scheme_Summary" && rIdx === 1) {
+              xmlParts.push('<Row ss:Height="10"></Row>');
+              return;
+            }
+            var rowHeight = rIdx === headerIdx ? 28 : (rIdx === totalIdx ? 24 : 20);
+            xmlParts.push('<Row ss:Height="' + rowHeight + '">');
+            var plainVals = row.map(function (it) { return (it && typeof it === "object" && "v" in it) ? it.v : it; });
+            var rowJoined = plainVals.join(" ");
+            var is2Cr = rIdx > headerIdx && rIdx !== totalIdx && (rowJoined.indexOf("YES (") !== -1 || rowJoined.indexOf("Exceeds Rs. 2,00,00,000") !== -1);
+            var isDup = rIdx > headerIdx && rIdx !== totalIdx && rowJoined.indexOf("Duplicate Computer No.") !== -1;
+
+            for (var cIdx = 0; cIdx < colCount; cIdx++) {
+              var cellVal = cIdx < plainVals.length ? plainVals[cIdx] : "";
+              var styleId = "Default";
+              if (sheetName === "District_Scheme_Summary" && rIdx === 0) {
+                styleId = "TitleBanner";
+              } else if (rIdx === headerIdx) {
+                styleId = hdrStyle;
+              } else if (rIdx === totalIdx) {
+                styleId = "TotalRow";
+              } else if (is2Cr) {
+                styleId = "AlertDanger";
+              } else if (isDup) {
+                styleId = "AlertWarn";
+              } else if (rIdx % 2 === 0) {
+                styleId = "ZebraRow";
+              }
+
+              var isNum = typeof cellVal === "number" && !isNaN(cellVal);
+              var typeAttr = isNum ? "Number" : "String";
+              var mergeAttr = (sheetName === "District_Scheme_Summary" && rIdx === 0 && cIdx === 0 && colCount > 1)
+                ? ' ss:MergeAcross="' + (colCount - 1) + '"'
+                : "";
+              if (sheetName === "District_Scheme_Summary" && rIdx === 0 && cIdx > 0) continue;
+
+              xmlParts.push('<Cell ss:StyleID="' + styleId + '"' + mergeAttr + '><Data ss:Type="' + typeAttr + '">' + escapeHTML(cellVal) + "</Data></Cell>");
+            }
+            xmlParts.push("</Row>");
+          });
+          xmlParts.push("</Table></Worksheet>");
+        });
+        xmlParts.push("</Workbook>");
+
+        var blob = new Blob([xmlParts.join("\n")], { type: "application/vnd.ms-excel;charset=utf-8" });
+        triggerBlobDownload(blob, baseName + "_Reconciled.xls");
+        showToast("success", "Styled Excel Workbook Exported", "Downloaded " + baseName + "_Reconciled.xls with colorful headers, styled totals, and borders on every cell.");
+      }
+
+      function exportToCsv() {
+        if (!parsedState.allSchemes.length) return;
+        var headers = [
+          "File No.", "Computer No.", "Sl. No.", "Scheme ID", "Name of the Scheme",
+          "Type of Scheme", "District", "Block", "GP", "Mouza", "J.L. No.",
+          "Plot No.", "Administrative Approval (Rs.)", "Name of the Treasury", "Name of the D.D.O", "Exceeds Rs. 2 Cr Alert"
+        ];
+        var csvRows = [headers.join(",")];
+        parsedState.allSchemes.forEach(function (s) {
+          var vals = [
+            s.fileNo, s.compNo, s.slNo, s.schID, s.schName, s.type, s.district,
+            s.block, s.gp, s.mouza, s.jl, s.plot, s.amount, s.treasury, s.ddo,
+            s.exceeds2Cr ? "YES" : "No"
+          ].map(function (v) {
+            return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+          });
+          csvRows.push(vals.join(","));
+        });
+
+        var blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+        var baseName = (parsedState.sourceFileName || "Cleaned_Scheme_Data").replace(/\.txt$/i, "");
+        triggerBlobDownload(blob, baseName + "_Cleaned_Schemes.csv");
+        showToast("success", "CSV Exported", "Downloaded " + baseName + "_Cleaned_Schemes.csv.");
+      }
+
+      function triggerBlobDownload(blob, filename) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      // =========================================================================
+      // 7. SERVER sample.txt LOADER & DOWNLOADER (WITH BUILT-IN FALLBACK)
+      // =========================================================================
+      function getBuiltInSampleText() {
+        var lines = [
+          "Inner Page of file with number WBADMIP/SPMU/AA-104/2025-26/Part(9)",
+          "File No: WBADMIP/SPMU/AA-104/2025-26/Part(9)",
+          "1573151",
+          "Subject: WDS/Jhargram WDS/Jhargram",
+          "Note #1",
+          "Sl. No.\tScheme ID\tName of the Scheme\tType of Scheme\tDistrict\tBlock\tGP\tMouza\tJ.L. No.\tPlot No.\tAdministrative Approval (Rs.)\tName of the Treasury\tName of the D.D.O",
+          "1\t2-19-01-001\tConstruction of WDS at Lodhasuli\tWDS\tJhargram\tJhargram\tLodhasuli\tLodhasuli\t112\tJan-88\t4500000\tJhargram Treasury\tExecutive Engineer (AI), Jhargram",
+          "2\t2-19-01-002\tConstruction of WDS at Manikpara\t\t\tJhargram\tManikpara\tManikpara\t84\t412\t5200000\t\t",
+          "Note #3 (Revised Estimate)",
+          "Sl. No.\tScheme ID\tName of the Scheme\tType of Scheme\tDistrict\tBlock\tGP\tMouza\tJ.L. No.\tPlot No.\tAdministrative Approval (Rs.)\tName of the Treasury\tName of the D.D.O",
+          "1\t2-19-01-001\tConstruction of WDS at Lodhasuli (Revised)\tWDS\tJhargram\tJhargram\tLodhasuli\tLodhasuli\t112\tJan-88\t4800000\tJhargram Treasury\tExecutive Engineer (AI), Jhargram",
+          "2\t2-19-01-002\tConstruction of WDS at Manikpara\t\t\tJhargram\tManikpara\tManikpara\t84\t412\t5200000\t\t",
+          "Total Administrative Approval Amount: Rs. 1,00,00,000",
+          "",
+          "Inner Page of file with number WBADMIP/SPMU/AA-104/2025-26/Part(9)",
+          "Duplicate dump of file with computer number 1573151",
+          "Subject: WDS/Jhargram",
+          "Note #3 (Latest Snapshot)",
+          "Sl. No.\tScheme ID\tName of the Scheme\tType of Scheme\tDistrict\tBlock\tGP\tMouza\tJ.L. No.\tPlot No.\tAdministrative Approval (Rs.)\tName of the Treasury\tName of the D.D.O",
+          "1\t2-19-01-001\tConstruction of WDS at Lodhasuli (Revised)\tWDS\tJhargram\tJhargram\tLodhasuli\tLodhasuli\t112\tJan-88\t4800000\tJhargram Treasury\tExecutive Engineer (AI), Jhargram",
+          "2\t2-19-01-002\tConstruction of WDS at Manikpara\t\t\tJhargram\tManikpara\tManikpara\t84\t412\t5200000\t\t",
+          "Total Administrative Approval Amount: Rs. 1,00,00,000",
+          "",
+          "Inner Page of file with number WBADMIP/SPMU/AA-210/2025-26/Part(16)",
+          "This file is tracked with computer number 1578920",
+          "Subject: WDS(Canal)/South 24 Parganas",
+          "Note #1",
+          "Sl. No.\tScheme ID\tName of the Scheme\tType of Scheme\tDistrict\tBlock\tGP\tMouza\tJ.L. No.\tPlot No.\tAdministrative Approval (Rs.)\tName of the Treasury\tName of the D.D.O",
+          "1\t2-16-04-101\tRe-excavation of Khal at Canning-I\tWDS(Canal)\tSouth 24 Paraganas\tCanning-I\tDaria\tDaria\t45\t102, 103\t13500000\tBaruipur Treasury\tExecutive Engineer (AI), South 24 Pgs",
+          "03-01-1900 00:00\t2-16-04-102\tRe-excavation of Main Channel at Basanti\t\t\tBasanti\tBharatgarh\tBharatgarh\t19\t55\t21500000\t\t",
+          "Total Administrative Approval Amount: Rs. 3,50,00,000",
+          "",
+          "Inner Page of file with number WBADMIP/SPMU/AA-305/2025-26/Part(35)",
+          "1574410",
+          "Subject: LDTW(S)/Paschim Burdwan",
+          "Note #1",
+          "Sl. No.\tScheme ID\tName of the Scheme\tType of Scheme\tDistrict\tBlock\tGP\tMouza\tJ.L. No.\tPlot No.\tAdministrative Approval (Rs.)\tName of the Treasury\tName of the D.D.O",
+          "1\t2-21-02-011\tSolar LDTW Cluster at Kanksa\tLDTW(S)\tPaschim Burdwan\tKanksa\tTrilokchandrapur\tGopalpur\t31\t209\t6450000\tDurgapur Treasury\tExecutive Engineer (AI), Durgapur",
+          "2\t2-21-02-012\tSolar LDTW Cluster at Andal\t\t\tAndal\tKhandra\tKhandra\t14\t88\t5850000\t\t",
+          "Total Administrative Approval Amount: Rs. 1,23,00,000"
+        ];
+        return lines.join("\n");
+      }
+
+      function loadSampleFromServer() {
+        fetch("./sample.txt", { cache: "no-store" })
+          .then(function (response) {
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            return response.arrayBuffer();
+          })
+          .then(function (buffer) {
+            var decoded = decodeArrayBufferAutoBOM(buffer);
+            if (decoded.text.indexOf("Inner Page of file with number ") === -1) {
+              throw new Error("Server sample.txt did not contain valid e-Office file blocks.");
+            }
+            document.getElementById("fileStatusBadge").textContent = "Loaded from Server: sample.txt (" + decoded.encoding + ")";
+            runEOfficeParser(decoded.text, "sample.txt", decoded.encoding, 0);
+          })
+          .catch(function () {
+            var fallbackText = getBuiltInSampleText();
+            document.getElementById("fileStatusBadge").textContent = "Loaded: sample.txt (Built-in Server Template • UTF-8)";
+            runEOfficeParser(fallbackText, "sample.txt", "UTF-8", 0);
+          });
+      }
+
+      function downloadSampleTxt() {
+        fetch("./sample.txt", { cache: "no-store" })
+          .then(function (response) {
+            if (!response.ok) throw new Error("Not found");
+            return response.blob();
+          })
+          .then(function (blob) {
+            triggerBlobDownload(blob, "sample.txt");
+            showToast("success", "Sample File Downloaded", "Downloaded server sample.txt for local editing and modification.");
+          })
+          .catch(function () {
+            var fallbackText = getBuiltInSampleText();
+            var blob = new Blob([fallbackText], { type: "text/plain;charset=utf-8" });
+            triggerBlobDownload(blob, "sample.txt");
+            showToast("success", "Sample File Downloaded", "Downloaded sample.txt template for local editing and modification.");
+          });
+      }
+
+      // =========================================================================
+      // 8. TOAST BANNER HELPERS
+      // =========================================================================
+      function showToast(type, title, message) {
+        var banner = document.getElementById("toastBanner");
+        var titleEl = document.getElementById("toastTitle");
+        var msgEl = document.getElementById("toastMessage");
+
+        banner.className = "toast";
+        if (type === "error") {
+          banner.classList.add("toast-error");
+        } else if (type === "warning") {
+          banner.classList.add("toast-warning");
+        } else {
+          banner.classList.add("toast-success");
+        }
+
+        titleEl.textContent = title;
+        msgEl.textContent = message;
+      }
+
+      function hideToast() {
+        document.getElementById("toastBanner").classList.add("hidden");
+      }
+
+      // =========================================================================
+      // 9. INITIALIZATION & EVENT WIRING
+      // =========================================================================
+      function initApp() {
+        var fileInput = document.getElementById("fileInput");
+        var dropZone = document.getElementById("dropZone");
+
+        document.getElementById("btnBrowseFile").addEventListener("click", function (e) {
+          e.stopPropagation();
+          fileInput.click();
+        });
+
+        fileInput.addEventListener("change", function (e) {
+          if (e.target.files && e.target.files[0]) {
+            handleFileUpload(e.target.files[0]);
+          }
+        });
+
+        dropZone.addEventListener("click", function (e) {
+          if (e.target.tagName !== "BUTTON") {
+            fileInput.click();
+          }
+        });
+
+        dropZone.addEventListener("dragover", function (e) {
+          e.preventDefault();
+          dropZone.classList.add("drag-over");
+        });
+
+        dropZone.addEventListener("dragleave", function () {
+          dropZone.classList.remove("drag-over");
+        });
+
+        dropZone.addEventListener("drop", function (e) {
+          e.preventDefault();
+          dropZone.classList.remove("drag-over");
+          if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleFileUpload(e.dataTransfer.files[0]);
+          }
+        });
+
+        // Tab Switching
+        var tabBtns = document.querySelectorAll(".tab-btn");
+        tabBtns.forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var targetId = btn.getAttribute("data-tab");
+            tabBtns.forEach(function (b) { b.classList.remove("active"); });
+            btn.classList.add("active");
+
+            document.querySelectorAll(".tab-panel").forEach(function (panel) {
+              panel.classList.add("hidden");
+            });
+            var targetPanel = document.getElementById(targetId);
+            if (targetPanel) targetPanel.classList.remove("hidden");
+          });
+        });
+
+        // Delegated Single-Block Delete in Tab 5
+        document.getElementById("tbodyRawBlocks").addEventListener("click", function (e) {
+          var btn = e.target.closest(".btn-del-single-block");
+          if (btn) {
+            var idx = parseInt(btn.getAttribute("data-del-block"), 10);
+            if (!isNaN(idx)) {
+              deleteSingleRawBlock(idx);
+            }
+          }
+        });
+
+        // Filters & Sorting
+        document.getElementById("chkVerAlertsOnly").addEventListener("change", renderVerificationTable);
+        document.getElementById("searchSchemeInput").addEventListener("input", renderCleanedDataTable);
+        document.getElementById("filterDistrict").addEventListener("change", renderCleanedDataTable);
+        document.getElementById("filterSchemeType").addEventListener("change", renderCleanedDataTable);
+        document.getElementById("chkSchemeOver2CrOnly").addEventListener("change", renderCleanedDataTable);
+
+        document.querySelectorAll(".sortable").forEach(function (th) {
+          th.addEventListener("click", function () {
+            var col = th.getAttribute("data-sort");
+            if (parsedState.sortCol === col) {
+              parsedState.sortAsc = !parsedState.sortAsc;
+            } else {
+              parsedState.sortCol = col;
+              parsedState.sortAsc = true;
+            }
+            renderCleanedDataTable();
+          });
+        });
+
+        // Toolbar & Action Buttons
+        document.getElementById("btnCloseToast").addEventListener("click", hideToast);
+        document.getElementById("btnLoadSample").addEventListener("click", loadSampleFromServer);
+        document.getElementById("btnDropZoneLoadSample").addEventListener("click", function (e) {
+          e.stopPropagation();
+          loadSampleFromServer();
+        });
+        document.getElementById("btnDownloadSample").addEventListener("click", downloadSampleTxt);
+        document.getElementById("btnDropZoneDownloadSample").addEventListener("click", function (e) {
+          e.stopPropagation();
+          downloadSampleTxt();
+        });
+        document.getElementById("btnDownloadRectifiedTxt").addEventListener("click", downloadRectifiedTxt);
+        document.getElementById("btnCardDownloadRectified").addEventListener("click", downloadRectifiedTxt);
+        document.getElementById("btnTabDownloadRectified").addEventListener("click", downloadRectifiedTxt);
+        document.getElementById("btnDeleteAllDupBlocks").addEventListener("click", deleteAllDuplicateBlocks);
+        document.getElementById("btnTabDeleteAllDuplicates").addEventListener("click", deleteAllDuplicateBlocks);
+        document.getElementById("btnExportXlsx").addEventListener("click", exportToExcel);
+        document.getElementById("btnExportCsv").addEventListener("click", exportToCsv);
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initApp);
+      } else {
+        initApp();
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Discharge Estimator</title>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --secondary: #2563eb;
+            --bg: #f3f4f6;
+            --surface: #ffffff;
+            --border: #d1d5db;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0;
+            padding: 12px;
+            display: flex;
+            justify-content: center;
+        }
+        .app-container {
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 400px;
+            box-sizing: border-box;
+        }
+        h2 {
+            margin: 0 0 15px 0;
+            font-size: 1.25rem;
+            color: var(--primary);
+            text-align: center;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 10px;
+        }
+        .canvas-wrapper {
+            background: #fafafa;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: center;
+            padding: 10px 0;
+            overflow: hidden;
+        }
+        canvas {
+            max-width: 100%;
+            height: auto;
+            touch-action: none; 
+        }
+        .input-group {
+            margin-bottom: 12px;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--primary);
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1rem;
+            background-color: #f9fafb;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--secondary);
+            background-color: #fff;
+        }
+        button {
+            background-color: var(--secondary);
+            color: white;
+            border: none;
+            padding: 14px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 1rem;
+            font-weight: bold;
+            margin-top: 5px;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+        }
+        button:active {
+            background-color: #1d4ed8;
+            transform: translateY(1px);
+        }
+        .results-box {
+            background: #eff6ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid var(--secondary);
+            display: none;
+        }
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        .result-row:last-child {
+            margin-bottom: 0;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #bfdbfe;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+        .val-highlight {
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: #b91c1c;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <h2>Discharge Calculator by Dayamoy Ghosh, EE</h2>
+    
+    <div class="canvas-wrapper">
+        <canvas id="diagramCanvas" width="320" height="240"></canvas>
+    </div>
+
+    <div class="form-section">
+        <div class="input-group">
+            <label for="dia">Pipe Diameter (D) - in Millimeters (mm)</label>
+            <input type="number" id="dia" inputmode="decimal" placeholder="e.g., 100" value="100">
+        </div>
+        <div class="input-group">
+            <label for="horizontal">Horizontal Distance (H) - in Meters (m)</label>
+            <input type="number" id="horizontal" inputmode="decimal" step="0.01" placeholder="e.g., 0.80" value="0.80">
+        </div>
+        <div class="input-group">
+            <label for="vertical">Vertical Drop (V) - in Meters (m)</label>
+            <input type="number" id="vertical" inputmode="decimal" step="0.01" placeholder="e.g., 0.76" value="0.76">
+        </div>
+        
+        <button onclick="calculateDischarge()">Calculate Flow Rate</button>
+        
+        <div class="results-box" id="results">
+            <div class="result-row">
+                <span>Discharge (Q)</span>
+                <span><span class="val-highlight" id="qGallons">0.00</span> Gallon/hr</span>
+            </div>
+            <div class="result-row">
+                <span>Discharge (Q)</span>
+                <span><span class="val-highlight" id="qCubic" style="color:#1d4ed8;">0.00</span> m³/hr</span>
+            </div>
+            <div class="result-row">
+                <span>Jet Velocity</span>
+                <span id="velocityVal">0.00 m/s</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('diagramCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function drawDimensionArrow(x1, y1, x2, y2, text, offsetX, offsetY, isVertical) {
+        ctx.strokeStyle = '#374151';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        const headLen = 6;
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 + headLen * Math.cos(angle - Math.PI / 6), y1 + headLen * Math.sin(angle - Math.PI / 6));
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 + headLen * Math.cos(angle + Math.PI / 6), y1 + headLen * Math.sin(angle + Math.PI / 6));
+        ctx.stroke();
+
+        ctx.fillStyle = '#111827';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        const textX = (x1 + x2) / 2 + offsetX;
+        const textY = (y1 + y2) / 2 + offsetY;
+
+        if (isVertical) {
+            ctx.save();
+            ctx.translate(textX, textY);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillStyle = '#fafafa';
+            ctx.fillRect(-20, -8, 40, 16);
+            ctx.fillStyle = '#111827';
+            ctx.fillText(text, 0, 0);
+            ctx.restore();
+        } else {
+            ctx.fillStyle = '#fafafa';
+            ctx.fillRect(textX - 25, textY - 8, 50, 16);
+            ctx.fillStyle = '#111827';
+            ctx.fillText(text, textX, textY);
+        }
+    }
+
+    function drawDiagram(d, h, v) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const pipeX = 60;
+        const pipeY = 50;
+        const groundY = 190;
+        const dropX = 260;
+        const pipeRadius = 15;
+
+        ctx.beginPath();
+        ctx.moveTo(10, groundY);
+        ctx.lineTo(310, groundY);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#4b5563';
+        ctx.stroke();
+        
+        for(let i = 15; i < 310; i += 15) {
+            ctx.beginPath();
+            ctx.moveTo(i, groundY);
+            ctx.lineTo(i - 8, groundY + 12);
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(pipeX, pipeY);
+        ctx.quadraticCurveTo(pipeX + (dropX - pipeX) * 0.75, pipeY, dropX, groundY);
+        ctx.lineWidth = pipeRadius * 1.2;
+        ctx.strokeStyle = 'rgba(59, 130, 246, 0.7)';
+        ctx.stroke();
+
+        ctx.fillStyle = '#9ca3af';
+        ctx.fillRect(0, pipeY - pipeRadius, pipeX, pipeRadius * 2);
+        ctx.fillStyle = '#4b5563';
+        ctx.fillRect(pipeX - 6, pipeY - pipeRadius - 2, 6, pipeRadius * 2 + 4); 
+
+        ctx.strokeStyle = '#9ca3af';
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        
+        ctx.beginPath(); ctx.moveTo(pipeX, groundY); ctx.lineTo(pipeX, groundY + 30); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(dropX, groundY); ctx.lineTo(dropX, groundY + 30); ctx.stroke();
+        
+        ctx.beginPath(); ctx.moveTo(pipeX, pipeY); ctx.lineTo(dropX + 30, pipeY); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(dropX, groundY); ctx.lineTo(dropX + 30, groundY); ctx.stroke();
+        ctx.setLineDash([]); 
+
+        drawDimensionArrow(pipeX - 15, pipeY - pipeRadius, pipeX - 15, pipeY + pipeRadius, `${d || 0}`, -15, 0, true);
+        drawDimensionArrow(pipeX, groundY + 20, dropX, groundY + 20, `H: ${h || 0}m`, 0, 0, false);
+        drawDimensionArrow(dropX + 20, pipeY, dropX + 20, groundY, `V: ${v || 0}m`, 0, 0, true);
+    }
+
+    function calculateDischarge() {
+        const d_mm = parseFloat(document.getElementById('dia').value);
+        const h = parseFloat(document.getElementById('horizontal').value);
+        const v = parseFloat(document.getElementById('vertical').value);
+
+        if (isNaN(d_mm) || isNaN(h) || isNaN(v) || d_mm <= 0 || h <= 0 || v <= 0) {
+            alert("Please enter valid positive numbers for all dimensions.");
+            return;
+        }
+
+        const d_meters = d_mm / 1000; 
+        const g = 9.81; 
+        
+        const time = Math.sqrt((2 * v) / g);
+        const velocity = h / time;
+        const area = Math.PI * Math.pow(d_meters / 2, 2);
+        
+        const qCubicSec = area * velocity;
+        const qCubicHour = qCubicSec * 3600;
+        const qGallonsHour = qCubicHour * 219.973; // Conversion factor for US Gallons
+
+        document.getElementById('qGallons').innerText = qGallonsHour.toFixed(2);
+        document.getElementById('qCubic').innerText = qCubicHour.toFixed(2);
+        document.getElementById('velocityVal').innerText = velocity.toFixed(2) + ' m/s';
+        document.getElementById('results').style.display = 'block';
+
+        drawDiagram(d_mm + 'mm', h, v);
+    }
+
+    window.onload = () => {
+        drawDiagram('D', 'H', 'V');
+    };
+</script>
+
+</body>
+</html>

@@ -1,0 +1,2224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WBADMIP e-Office Inner Page Parser & Reconciler</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+  <style>
+    :root {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --border: #cbd5e1;
+      --border-light: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #1e3a8a;
+      --primary-hover: #172554;
+      --teal: #0f766e;
+      --violet: #5b21b6;
+      --indigo: #312e81;
+      --slate: #1e293b;
+      --amber-bg: #fffbeb;
+      --amber-border: #f59e0b;
+      --amber-text: #92400e;
+      --rose-bg: #fff1f2;
+      --rose-border: #f43f5e;
+      --rose-text: #9f1239;
+      --green-bg: #dcfce7;
+      --green-text: #166534;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      padding-bottom: 48px;
+    }
+
+    .topbar {
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+      color: #ffffff;
+      padding: 16px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+    }
+
+    .topbar-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; }
+
+    .brand-badge {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .brand h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+    .brand p { font-size: 12px; color: #cbd5e1; margin-top: 2px; }
+
+    .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 8px 13px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-white { background: #ffffff; color: #0f172a; border-color: #e2e8f0; }
+    .btn-white:hover:not(:disabled) { background: #f8fafc; }
+    .btn-glass { background: rgba(255, 255, 255, 0.12); color: #ffffff; border-color: rgba(255, 255, 255, 0.25); }
+    .btn-glass:hover:not(:disabled) { background: rgba(255, 255, 255, 0.22); }
+    .btn-emerald { background: #059669; color: #ffffff; box-shadow: 0 2px 6px rgba(5, 150, 105, 0.3); }
+    .btn-emerald:hover:not(:disabled) { background: #047857; }
+    .btn-amber { background: #d97706; color: #ffffff; }
+    .btn-amber:hover:not(:disabled) { background: #b45309; }
+    .btn-danger-outline { background: #fff1f2; color: #be123c; border-color: #fecdd3; padding: 4px 9px; font-size: 11.5px; }
+    .btn-danger-outline:hover { background: #ffe4e6; }
+
+    .container { max-width: 1440px; margin: 20px auto 0; padding: 0 20px; }
+
+    #globalError {
+      display: none;
+      background: #fef2f2;
+      border: 1px solid #ef4444;
+      color: #991b1b;
+      padding: 12px 16px;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .upload-card {
+      background: var(--surface);
+      border: 2px dashed #94a3b8;
+      border-radius: 12px;
+      padding: 18px 22px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+      transition: border-color 0.2s, background-color 0.2s;
+    }
+
+    .upload-card.dragover { border-color: #2563eb; background: #eff6ff; }
+    .upload-info { display: flex; align-items: center; gap: 14px; }
+
+    .upload-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: #dbeafe;
+      color: #1e3a8a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .upload-info h2 { font-size: 14.5px; font-weight: 700; color: #0f172a; }
+    .upload-info p { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+
+    .status-pill {
+      display: inline-block;
+      margin-top: 5px;
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 2px 9px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      color: #334155;
+    }
+
+    .status-pill.ready { background: #dcfce7; color: #166534; }
+
+    .alert-banner {
+      border-radius: 10px;
+      padding: 13px 16px;
+      margin-bottom: 14px;
+      display: none;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      border-left: 5px solid;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+    }
+
+    .alert-amber { background: var(--amber-bg); border-color: var(--amber-border); color: var(--amber-text); }
+    .alert-rose { background: var(--rose-bg); border-color: var(--rose-border); color: var(--rose-text); }
+    .alert-body { flex: 1; }
+    .alert-title { font-size: 13.5px; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+    .alert-desc { font-size: 12.5px; margin-top: 4px; line-height: 1.5; }
+    .alert-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex-shrink: 0; }
+    .close-btn { background: transparent; border: none; font-size: 18px; line-height: 1; cursor: pointer; color: inherit; opacity: 0.7; padding: 2px 6px; }
+    .close-btn:hover { opacity: 1; }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border-light);
+      border-left: 4px solid #1e3a8a;
+      border-radius: 10px;
+      padding: 14px 16px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    }
+
+    .kpi-card.teal { border-left-color: #0f766e; }
+    .kpi-card.indigo { border-left-color: #4338ca; }
+    .kpi-card.amber { border-left-color: #d97706; }
+    .kpi-card.rose { border-left-color: #e11d48; }
+
+    .kpi-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    .kpi-value { font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 4px; }
+    .kpi-sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+
+    .view-bar {
+      background: var(--surface);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 18px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .pill-group { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    .view-pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 7px;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      color: #334155;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .view-pill:hover { background: #e2e8f0; }
+    .view-pill.active { background: #1e3a8a; color: #ffffff; border-color: #1e3a8a; }
+
+    .sheet-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 24px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+    }
+
+    .sheet-card.hidden { display: none; }
+
+    .sheet-banner {
+      padding: 12px 18px;
+      color: #ffffff;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .banner-blue { background: linear-gradient(90deg, #1e3a8a, #2563eb); }
+    .banner-violet { background: linear-gradient(90deg, #5b21b6, #7c3aed); }
+    .banner-teal { background: linear-gradient(90deg, #0f766e, #0d9488); }
+    .banner-indigo { background: linear-gradient(90deg, #312e81, #4338ca); }
+    .banner-slate { background: linear-gradient(90deg, #1e293b, #334155); }
+
+    .sheet-banner h3 { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .sheet-tag {
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 2px 8px;
+      border-radius: 5px;
+      letter-spacing: 0.02em;
+    }
+
+    .sheet-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+    .ctrl-input, .ctrl-select {
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      background: rgba(255, 255, 255, 0.95);
+      color: #0f172a;
+      outline: none;
+    }
+
+    .ctrl-check {
+      font-size: 12px;
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .table-wrap { width: 100%; overflow-x: auto; max-height: 540px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 9px 10px;
+      text-align: center;
+      font-weight: 700;
+      color: #ffffff;
+      border: 1px solid #94a3b8;
+      white-space: nowrap;
+    }
+
+    .th-blue th { background: #1e3a8a; }
+    .th-violet th { background: #5b21b6; }
+    .th-teal th { background: #0f766e; }
+    .th-indigo th { background: #312e81; }
+    .th-slate th { background: #1e293b; }
+
+    tbody td {
+      padding: 7px 10px;
+      border: 1px solid #cbd5e1;
+      vertical-align: middle;
+    }
+
+    tbody tr:nth-child(even) { background-color: #f8fafc; }
+    tbody tr:hover { background-color: #eff6ff; }
+    tbody tr.row-exceed { background-color: #fff1f2 !important; }
+    tbody tr.row-dup { background-color: #fffbeb !important; }
+    tbody tr.row-subtotal { background-color: #ede9fe !important; font-weight: 700; color: #4c1d95; }
+
+    tfoot td {
+      position: sticky;
+      bottom: 0;
+      z-index: 9;
+      padding: 9px 10px;
+      font-weight: 800;
+      border-top: 2px solid #475569;
+      border-bottom: 3px double #475569;
+      border-left: 1px solid #94a3b8;
+      border-right: 1px solid #94a3b8;
+    }
+
+    .tf-blue td { background: #dbeafe; color: #1e3a8a; }
+    .tf-violet td { background: #ede9fe; color: #5b21b6; }
+    .tf-teal td { background: #ccfbf1; color: #115e59; }
+    .tf-indigo td { background: #e0e7ff; color: #312e81; }
+
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .ctr { text-align: center; }
+    .bold { font-weight: 700; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .badge-ok { background: #dcfce7; color: #166534; }
+    .badge-warn { background: #fef3c7; color: #92400e; }
+    .badge-danger { background: #ffe4e6; color: #be123c; }
+    .badge-info { background: #dbeafe; color: #1e40af; }
+
+    .empty-state { text-align: center; padding: 36px 16px; color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-badge">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+        </div>
+        <div>
+          <h1>WBADMIP Phase-II • e-Office Inner Page Parser & Reconciler</h1>
+          <p>Auto-BOM Reader • Dynamic Column &amp; Jhora/WMS Support • Duplicate Computer No. Guard • ₹2.00 Cr AA Alert</p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-white" id="btnChooseFile" type="button">Upload .txt</button>
+        <button class="btn btn-glass" id="btnLoadSampleTop" type="button">Load sample.txt</button>
+        <button class="btn btn-glass" id="btnDownloadSampleTop" type="button">Download sample.txt</button>
+        <button class="btn btn-amber" id="btnDownloadRectifiedTop" type="button" disabled>Rectified .txt</button>
+        <button class="btn btn-emerald" id="btnExportExcel" type="button" disabled>Export Styled Excel (.xlsx)</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <div id="globalError"></div>
+
+    <!-- Dropzone Card -->
+    <section class="upload-card" id="dropZone">
+      <div class="upload-info">
+        <div class="upload-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <div>
+          <h2>Drop e-Office Inner Page Text Dump (.txt) Here or Use Server Sample</h2>
+          <p>Supports WDS, WDS (Canal), TW (Solar), PDW (Solar), PDW (Civil Works), Jhora, WMS, and Check Dam dumps.</p>
+          <span class="status-pill" id="fileStatusBadge">No file loaded yet</span>
+        </div>
+      </div>
+      <div class="actions">
+        <input type="file" id="fileInput" accept=".txt" style="display:none" />
+        <button class="btn btn-white" id="btnBrowseDrop" type="button">Select .txt File</button>
+        <button class="btn btn-white" id="btnLoadSampleDrop" type="button">Load Server sample.txt</button>
+        <button class="btn btn-white" id="btnDownloadSampleDrop" type="button">Download sample.txt</button>
+      </div>
+    </section>
+
+    <!-- Duplicate Computer No. Warning Banner -->
+    <div class="alert-banner alert-amber" id="dupWarningBanner">
+      <div class="alert-body">
+        <div class="alert-title">
+          <span>Warning: Duplicate Computer Number(s) Detected in Input File</span>
+        </div>
+        <div class="alert-desc" id="dupWarningText"></div>
+      </div>
+      <div class="alert-actions">
+        <button class="btn btn-amber" id="btnDeleteAllDups" type="button">Delete Duplicate Blocks (Keep Latest)</button>
+        <button class="btn btn-white" id="btnDownloadRectifiedBanner" type="button">Download Rectified .txt</button>
+        <button class="close-btn" id="btnCloseDupBanner" type="button" title="Dismiss">&times;</button>
+      </div>
+    </div>
+
+    <!-- > 2,00,00,000 AA Ceiling Warning Banner -->
+    <div class="alert-banner alert-rose" id="aaLimitBanner">
+      <div class="alert-body">
+        <div class="alert-title">
+          <span>Alert: Administrative Approval (AA) Exceeds ₹2,00,00,000 (₹2.00 Crore) Ceiling</span>
+        </div>
+        <div class="alert-desc" id="aaLimitText"></div>
+      </div>
+      <div class="alert-actions">
+        <button class="close-btn" id="btnCloseAaBanner" type="button" title="Dismiss">&times;</button>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Unique e-Office Files</div>
+        <div class="kpi-value" id="kpiFiles">0</div>
+        <div class="kpi-sub" id="kpiFilesSub">0 raw file blocks parsed</div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-label">Deduplicated Schemes</div>
+        <div class="kpi-value" id="kpiSchemes">0</div>
+        <div class="kpi-sub" id="kpiDistrictsSub">Across 0 districts</div>
+      </div>
+      <div class="kpi-card indigo">
+        <div class="kpi-label">Total Reconciled AA (₹)</div>
+        <div class="kpi-value" id="kpiTotalAA">₹0</div>
+        <div class="kpi-sub">Note revisions applied</div>
+      </div>
+      <div class="kpi-card amber">
+        <div class="kpi-label">Duplicate Computer Nos.</div>
+        <div class="kpi-value" id="kpiDupCount">0</div>
+        <div class="kpi-sub" id="kpiDupSub">No duplicate blocks</div>
+      </div>
+      <div class="kpi-card rose">
+        <div class="kpi-label">AA &gt; ₹2,00,00,000 Alerts</div>
+        <div class="kpi-value" id="kpiExceedCount">0</div>
+        <div class="kpi-sub" id="kpiExceedSub">Files or schemes above ₹2 Cr</div>
+      </div>
+    </section>
+
+    <!-- View Filter Bar -->
+    <section class="view-bar">
+      <div class="pill-group" id="viewPills">
+        <button class="view-pill active" data-target="all" type="button">All 5 Excel Sheets Stacked</button>
+        <button class="view-pill" data-target="secSummary" type="button">1. District_Scheme_Summary</button>
+        <button class="view-pill" data-target="secBreakdown" type="button">2. District_Type_Breakdown</button>
+        <button class="view-pill" data-target="secVerification" type="button">3. File_Verification</button>
+        <button class="view-pill" data-target="secCleanedData" type="button">4. Cleaned_Scheme_Data</button>
+        <button class="view-pill" data-target="secIssuesLog" type="button">5. Issues_Fixed_Log</button>
+        <button class="view-pill" data-target="secRawBlocks" type="button">6. Raw Blocks &amp; Duplicates</button>
+      </div>
+    </section>
+
+    <!-- SHEET 1: District_Scheme_Summary -->
+    <section class="sheet-card" id="secSummary">
+      <div class="sheet-banner banner-blue">
+        <h3>
+          <span class="sheet-tag">Excel Sheet 1</span>
+          <span>District_Scheme_Summary (District-Wise &amp; Scheme-Wise AA Matrix)</span>
+        </h3>
+      </div>
+      <div class="table-wrap">
+        <table id="tblSummary">
+          <thead class="th-blue" id="theadSummary"></thead>
+          <tbody id="tbodySummary">
+            <tr><td colspan="6" class="empty-state">Upload an e-Office .txt file or click <strong>Load sample.txt</strong> to generate reports.</td></tr>
+          </tbody>
+          <tfoot class="tf-blue" id="tfootSummary"></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- SHEET 2: District_Type_Breakdown -->
+    <section class="sheet-card" id="secBreakdown">
+      <div class="sheet-banner banner-violet">
+        <h3>
+          <span class="sheet-tag">Excel Sheet 2</span>
+          <span>District_Type_Breakdown (District-Wise &amp; Scheme-Type-Wise Count &amp; AA Amount)</span>
+        </h3>
+        <div class="sheet-controls">
+          <select class="ctrl-select" id="fltBdDistrict"><option value="">All Districts</option></select>
+          <select class="ctrl-select" id="fltBdType"><option value="">All Scheme Types</option></select>
+          <label class="ctrl-check">
+            <input type="checkbox" id="chkBdSubtotals" checked /> Show District Subtotals
+          </label>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead class="th-violet">
+            <tr>
+              <th style="width:65px">Sl. No.</th>
+              <th>District</th>
+              <th>Type of Scheme</th>
+              <th>No. of Schemes</th>
+              <th>Administrative Approval (₹)</th>
+              <th>% Share of Total AA</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyBreakdown">
+            <tr><td colspan="6" class="empty-state">Awaiting data...</td></tr>
+          </tbody>
+          <tfoot class="tf-violet" id="tfootBreakdown"></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- SHEET 3: File_Verification -->
+    <section class="sheet-card" id="secVerification">
+      <div class="sheet-banner banner-teal">
+        <h3>
+          <span class="sheet-tag">Excel Sheet 3</span>
+          <span>File_Verification (File-Level Reconciliation &amp; ₹2,00,00,000 Ceiling Check)</span>
+        </h3>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead class="th-teal">
+            <tr>
+              <th>File No.</th>
+              <th>Computer No.</th>
+              <th>Subject</th>
+              <th>Schemes</th>
+              <th>Calculated Total (₹)</th>
+              <th>Stated File Total (₹)</th>
+              <th>Verification Status</th>
+              <th>AA &gt; ₹2 Cr Flag</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyVerification">
+            <tr><td colspan="8" class="empty-state">Awaiting data...</td></tr>
+          </tbody>
+          <tfoot class="tf-teal" id="tfootVerification"></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- SHEET 4: Cleaned_Scheme_Data -->
+    <section class="sheet-card" id="secCleanedData">
+      <div class="sheet-banner banner-indigo">
+        <h3>
+          <span class="sheet-tag">Excel Sheet 4</span>
+          <span>Cleaned_Scheme_Data (Deduplicated Master Scheme Register)</span>
+        </h3>
+        <div class="sheet-controls">
+          <input type="text" class="ctrl-input" id="fltDataSearch" placeholder="Search Scheme ID, Name, Mouza..." />
+          <select class="ctrl-select" id="fltDataDistrict"><option value="">All Districts</option></select>
+          <select class="ctrl-select" id="fltDataType"><option value="">All Types</option></select>
+          <label class="ctrl-check">
+            <input type="checkbox" id="chkDataExceedOnly" /> &gt; ₹2 Cr Only
+          </label>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead class="th-indigo">
+            <tr>
+              <th>File No.</th>
+              <th>Computer No.</th>
+              <th>Sl.</th>
+              <th>Scheme ID</th>
+              <th>Name of the Scheme</th>
+              <th>Type of Scheme</th>
+              <th>District</th>
+              <th>Block</th>
+              <th>GP</th>
+              <th>Mouza</th>
+              <th>J.L. No.</th>
+              <th>Plot No.</th>
+              <th>AA Amount (₹)</th>
+              <th>Treasury</th>
+              <th>D.D.O</th>
+              <th>AA Flag</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyCleanedData">
+            <tr><td colspan="16" class="empty-state">Awaiting data...</td></tr>
+          </tbody>
+          <tfoot class="tf-indigo" id="tfootCleanedData"></tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- SHEET 5: Issues_Fixed_Log -->
+    <section class="sheet-card" id="secIssuesLog">
+      <div class="sheet-banner banner-slate">
+        <h3>
+          <span class="sheet-tag">Excel Sheet 5</span>
+          <span>Issues_Fixed_Log (Automated Data Cleaning &amp; Audit Trail)</span>
+        </h3>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead class="th-slate">
+            <tr>
+              <th style="width:22%">Issue Category</th>
+              <th style="width:24%">Affected File(s) / Scope</th>
+              <th style="width:27%">Root Cause in Raw .txt</th>
+              <th style="width:27%">Action Taken</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyIssuesLog"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECTION 6: Raw File Blocks & Duplicate Manager -->
+    <section class="sheet-card" id="secRawBlocks">
+      <div class="sheet-banner banner-slate">
+        <h3>
+          <span class="sheet-tag">Input Manager</span>
+          <span>Raw e-Office File Blocks &amp; Duplicate Computer No. Cleaner</span>
+        </h3>
+        <div class="sheet-controls">
+          <button class="btn btn-amber" id="btnDeleteAllDupsCard" type="button" style="padding:5px 10px;font-size:12px;">Delete All Duplicate Blocks</button>
+          <button class="btn btn-white" id="btnDownloadRectifiedCard" type="button" style="padding:5px 10px;font-size:12px;">Download Rectified .txt</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead class="th-slate">
+            <tr>
+              <th>Block #</th>
+              <th>File No.</th>
+              <th>Computer No.</th>
+              <th>Subject</th>
+              <th>Lines</th>
+              <th>Duplicate Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyRawBlocks">
+            <tr><td colspan="7" class="empty-state">No blocks loaded.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      window.onerror = function (msg, url, line) {
+        var el = document.getElementById("globalError");
+        if (el) {
+          el.style.display = "block";
+          el.textContent = "Application Error (Line " + line + "): " + msg;
+        }
+      };
+
+      var AA_LIMIT = 20000000; // Rs. 2,00,00,000 (2 Crore)
+
+      var WB_DISTRICTS = {
+        alipurduar: "Alipurduar",
+        bankura: "Bankura",
+        birbhum: "Birbhum",
+        coochbehar: "Cooch Behar",
+        kochbihar: "Cooch Behar",
+        dakshin_dinajpur: "Dakshin Dinajpur",
+        dakshindinajpur: "Dakshin Dinajpur",
+        darjeeling: "Darjeeling",
+        hooghly: "Hooghly",
+        howrah: "Howrah",
+        jalpaiguri: "Jalpaiguri",
+        jhargram: "Jhargram",
+        kalimpong: "Kalimpong",
+        kolkata: "Kolkata",
+        malda: "Malda",
+        murshidabad: "Murshidabad",
+        nadia: "Nadia",
+        north24parganas: "North 24 Parganas",
+        north24paraganas: "North 24 Parganas",
+        paschimbardhaman: "Paschim Bardhaman",
+        paschimburdwan: "Paschim Bardhaman",
+        paschimmedinipur: "Paschim Medinipur",
+        purbabardhaman: "Purba Bardhaman",
+        purbaburdwan: "Purba Bardhaman",
+        purbamedinipur: "Purba Medinipur",
+        purulia: "Purulia",
+        south24parganas: "South 24 Parganas",
+        south24paraganas: "South 24 Parganas",
+        uttardinajpur: "Uttar Dinajpur"
+      };
+
+      var state = {
+        fileName: "sample.txt",
+        rawBlocks: [],
+        uniqueBlocks: [],
+        duplicateGroups: {},
+        schemes: [],
+        verifications: [],
+        districts: [],
+        schemeTypes: [],
+        exceedItems: []
+      };
+
+      var BUILTIN_SAMPLE_TXT = [
+        "Inner Page of file with number WBADMP-19011/8/2024-SEC(ADMIP)-WBADMIP-Part(13)",
+        "E",
+        "1579691",
+        "Subject:Darjeeling/Jhora & WMS Darjeeling/Jhora & WMS ",
+        "Electronic file , with computer number 1579691, with File number WBADMP-19011/8/2024-SEC(ADMIP)-WBADMIP-Part(13), having subject Darjeeling/Jhora & WMS.",
+        "Note # 1",
+        "Sl. No.",
+        "Scheme ID",
+        "Name of the Scheme",
+        "Type of Scheme",
+        "Name of the District",
+        "Block",
+        "GP",
+        "Mouza",
+        "J.L. No.",
+        "Plot No.",
+        "Administrative Approval (Rs.)",
+        "Name of the Treasury",
+        "Name of the D.D.O",
+        "1",
+        "2-05-03-012-10-001",
+        "Sample Jhora Scheme 1",
+        "Jhora",
+        "Darjeeling",
+        "Kurseong",
+        "St. Marys",
+        "Sample Mouza (12)",
+        "12",
+        "101",
+        "2232573",
+        "Kurseong Treasury",
+        "Executive Engineer, DPMU, Darjeeling, WBADMIP",
+        "2",
+        "2-05-03-012-10-002",
+        "Sample WMS Scheme 2",
+        "WMS",
+        "Darjeeling",
+        "Kurseong",
+        "St. Marys",
+        "Sample Mouza (12)",
+        "12",
+        "102",
+        "2109959",
+        "Kurseong Treasury",
+        "Executive Engineer, DPMU, Darjeeling, WBADMIP",
+        "Total Administrative Approval Amount  Rs.  4342532.00"
+      ].join("\r\n");
+
+      // =========================================================================
+      // ENCODING DETECTOR & TEXT DECODER
+      // =========================================================================
+      function decodeArrayBufferAuto(buffer) {
+        var bytes = new Uint8Array(buffer);
+        var encoding = "utf-8";
+        var offset = 0;
+
+        if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+          encoding = "utf-16le";
+          offset = 2;
+        } else if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+          encoding = "utf-16be";
+          offset = 2;
+        } else if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+          encoding = "utf-8";
+          offset = 3;
+        } else {
+          var nulls = 0;
+          var checkLen = Math.min(bytes.length, 400);
+          for (var i = 1; i < checkLen; i += 2) {
+            if (bytes[i] === 0) nulls++;
+          }
+          if (nulls > checkLen / 6) encoding = "utf-16le";
+        }
+
+        var decoder = new TextDecoder(encoding);
+        var text = decoder.decode(bytes.subarray(offset));
+        return text.replace(/\u0000/g, "");
+      }
+
+      // =========================================================================
+      // NORMALIZATION & HELPER FUNCTIONS
+      // =========================================================================
+      function cleanLineTabs(s) {
+        return String(s || "").replace(/\t/g, " ").replace(/\s+/g, " ").trim();
+      }
+
+      function isDigitsOnly(s) {
+        return /^\d+$/.test(String(s || "").trim());
+      }
+
+      function isSchemeID(s) {
+        return /^[12]-\d{2}-\d{2}-/.test(String(s || "").trim());
+      }
+
+      function fixExcelDatePlot(p) {
+        var str = String(p || "").trim();
+        var m = str.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-(.+)$/i);
+        if (!m) return str;
+        var map = {
+          jan: "1", feb: "2", mar: "3", apr: "4", may: "5", jun: "6",
+          jul: "7", aug: "8", sep: "9", oct: "10", nov: "11", dec: "12"
+        };
+        return (map[m[1].toLowerCase()] || m[1]) + "/" + m[2];
+      }
+
+      function isKnownDistrictToken(tok) {
+        var key = String(tok || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        return Boolean(WB_DISTRICTS[key]);
+      }
+
+      function normalizeDistrict(d) {
+        var clean = String(d || "").trim();
+        var key = clean.toLowerCase().replace(/[^a-z0-9]/g, "");
+        return WB_DISTRICTS[key] || clean;
+      }
+
+      function normalizeSchemeType(t) {
+        var clean = String(t || "").trim();
+        var key = clean.toUpperCase().replace(/\s+/g, "");
+        if (key === "WDS") return "WDS";
+        if (key === "WDS(CANAL)") return "WDS (Canal)";
+        if (key === "LDTW(S)" || key === "TW(SOLAR)") return "TW (Solar)";
+        if (key === "PDW(S)" || key === "PDW(SOLAR)") return "PDW (Solar)";
+        if (key === "PDW(CIVILWORKS)") return "PDW (Civil Works)";
+        if (key === "JHORA" || key === "JHORAWORKS") return "Jhora";
+        if (key === "WMS" || key === "WATERMANAGEMENTSTRUCTURE") return "WMS";
+        if (key === "CD" || key === "CHECKDAM") return "Check Dam";
+        return clean;
+      }
+
+      function extractAmountFromTotalLine(line) {
+        var cleaned = String(line || "")
+          .replace(/,/g, "")
+          .replace(/\/-\s*$/, "")
+          .replace(/\)\s*$/, "")
+          .trim();
+        var matches = cleaned.match(/\d+(?:\.\d+)?/g);
+        if (!matches || matches.length === 0) return 0;
+        return parseFloat(matches[matches.length - 1]) || 0;
+      }
+
+      function extractComputerNumber(lines) {
+        var maxScan = Math.min(40, lines.length);
+        for (var i = 0; i < maxScan; i++) {
+          var lClean = cleanLineTabs(lines[i]);
+          if (lClean.length === 7 && isDigitsOnly(lClean)) {
+            return lClean;
+          }
+          var m = lClean.match(/with computer number\s+(\d{6,8})/i);
+          if (m) return m[1];
+        }
+        return "";
+      }
+
+      function formatINR(num) {
+        var n = Math.round(Number(num) || 0);
+        return n.toLocaleString("en-IN");
+      }
+
+      function escapeHtml(str) {
+        return String(str == null ? "" : str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      // =========================================================================
+      // CORE E-OFFICE PARSER (DYNAMIC TYPE/DISTRICT DETECTION FOR JHORA, WMS, WDS)
+      // =========================================================================
+      function splitIntoBlocks(rawText) {
+        var normalized = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        var lines = normalized.split("\n");
+        var blocks = [];
+        var curr = [];
+
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          if (line.trim().indexOf("Inner Page of file with number ") === 0 && curr.length > 10) {
+            blocks.push(curr);
+            curr = [];
+          }
+          curr.push(line);
+        }
+        if (curr.length > 0) blocks.push(curr);
+
+        return blocks.map(function (bLines, idx) {
+          var fileNo = cleanLineTabs(bLines[0].replace("Inner Page of file with number ", ""));
+          var compNo = extractComputerNumber(bLines);
+          var subj = "";
+          for (var j = 0; j < Math.min(40, bLines.length); j++) {
+            var lc = cleanLineTabs(bLines[j]);
+            if (lc.indexOf("Subject:") === 0) {
+              subj = lc.slice(8).trim();
+              var half = Math.floor(subj.length / 2);
+              if (half > 2 && subj.slice(0, half).trim() === subj.slice(half).trim()) {
+                subj = subj.slice(0, half).trim();
+              }
+              break;
+            }
+          }
+          return {
+            index: idx + 1,
+            fileNo: fileNo,
+            compNo: compNo,
+            dedupKey: compNo || fileNo || ("BLOCK_" + (idx + 1)),
+            subject: subj,
+            lines: bLines
+          };
+        });
+      }
+
+      function isVerticalHeaderStart(nonEmptyTokens, pos) {
+        return (
+          nonEmptyTokens[pos] === "Sl. No." &&
+          nonEmptyTokens[pos + 1] === "Scheme ID" &&
+          nonEmptyTokens[pos + 2] === "Name of the Scheme"
+        );
+      }
+
+      function isVerticalTableEnd(tok) {
+        return (
+          tok.indexOf("Total (Rs") === 0 ||
+          tok.indexOf("Total Rs") === 0 ||
+          tok.indexOf("Total Rupees") === 0 ||
+          tok.indexOf("Total Administrative Approval Amount") === 0 ||
+          tok.indexOf("(Rupees ") === 0 ||
+          tok.indexOf("Rupees ") === 0 ||
+          tok.indexOf("Head of Accounts") === 0
+        );
+      }
+
+      function isKnownSchemeTypeToken(tok) {
+        var k = String(tok || "").toUpperCase().replace(/\s+/g, "");
+        return (
+          k === "WDS" ||
+          k === "WDS(CANAL)" ||
+          k === "LDTW(S)" ||
+          k === "TW(SOLAR)" ||
+          k === "PDW(S)" ||
+          k === "PDW(SOLAR)" ||
+          k === "PDW(CIVILWORKS)" ||
+          k === "JHORA" ||
+          k === "JHORAWORKS" ||
+          k === "WMS" ||
+          k === "WATERMANAGEMENTSTRUCTURE" ||
+          k === "CHECKDAM" ||
+          k === "CD"
+        );
+      }
+
+      function parseSingleFileBlock(blockObj, dictAllSchemes, schemeOrder) {
+        var lines = blockObj.lines;
+        var fileNo = blockObj.fileNo;
+        var compNo = blockObj.compNo;
+        var subj = blockObj.subject;
+
+        var defaultType = "";
+        var defaultDist = "";
+        if (subj.indexOf("/") > -1) {
+          var sParts = subj.split("/");
+          var p0 = sParts[0].trim();
+          var p1 = sParts[sParts.length - 1].trim();
+          if (isKnownDistrictToken(p0)) {
+            defaultDist = normalizeDistrict(p0);
+            defaultType = normalizeSchemeType(p1);
+          } else {
+            defaultType = normalizeSchemeType(p0);
+            defaultDist = normalizeDistrict(p1);
+          }
+        }
+
+        // Extract Stated Total AA Amount
+        var statedTotal = 0;
+        var hasStatedTotal = false;
+        for (var i = 0; i < lines.length; i++) {
+          var lClean = cleanLineTabs(lines[i]);
+          if (lClean.toLowerCase().indexOf("total administrative approval amount") > -1) {
+            var amt = extractAmountFromTotalLine(lClean);
+            if (amt > 0) {
+              statedTotal = amt;
+              hasStatedTotal = true;
+            }
+          }
+        }
+
+        var dictFileSchemes = {};
+        var fileSchemeOrder = [];
+        var currType = defaultType;
+        var currDist = defaultDist;
+        var currTreasury = "";
+        var currDDO = "";
+
+        // Detect whether this block has tab-delimited scheme rows or vertical browser-copied lines
+        var hasTabSchemeRows = false;
+        for (var t = 0; t < lines.length; t++) {
+          if (lines[t].indexOf("\t") > -1) {
+            var tc = lines[t].split("\t");
+            if (tc.length >= 3 && isSchemeID(tc[1].trim())) {
+              hasTabSchemeRows = true;
+              break;
+            }
+          }
+        }
+
+        if (hasTabSchemeRows) {
+          // MODE A: Tab-Delimited Table Parsing
+          var idx = 0;
+          while (idx < lines.length) {
+            var cols = lines[idx].split("\t");
+            if (cols.length >= 3 && isSchemeID(cols[1].trim())) {
+              while (cols.length < 13) cols.push("");
+              var rawSl = cols[0].trim();
+              var schID = cols[1].trim();
+              var schName = cols[2].trim();
+              var rType = cols[3].trim();
+              var rDist = cols[4].trim();
+              var rBlock = cols[5].trim();
+              var rGP = cols[6].trim();
+              var rMouza = cols[7].trim();
+              var rJL = cols[8].trim();
+              var rPlot = fixExcelDatePlot(cols[9].trim());
+              var rAmtStr = cols[10].trim();
+              var rTreas = cols[11].trim();
+              var rDDO = cols[12].trim();
+
+              if (rawSl.indexOf("1900") > -1) {
+                rawSl = String(parseInt(rawSl.split("-")[0], 10) || rawSl);
+              }
+
+              var j = idx + 1;
+              while (j < lines.length) {
+                var nxtLine = lines[j];
+                if (
+                  nxtLine.indexOf("Sl. No.\tScheme ID") === 0 ||
+                  nxtLine.indexOf("Total") === 0 ||
+                  nxtLine.indexOf("Rupees") === 0 ||
+                  nxtLine.indexOf("(Rupees") === 0 ||
+                  nxtLine.indexOf("Head of Accounts") === 0
+                ) {
+                  break;
+                }
+                var nxtCols = nxtLine.split("\t");
+                if (nxtCols.length >= 2 && isSchemeID(nxtCols[1].trim())) break;
+
+                if (nxtCols.length >= 4 && !rType) rType = nxtCols[3].trim();
+                if (nxtCols.length >= 5 && !rDist) rDist = nxtCols[4].trim();
+                if (nxtCols.length >= 11 && !rAmtStr) rAmtStr = nxtCols[10].trim();
+                if (nxtCols.length >= 12 && !rTreas) rTreas = nxtCols[11].trim();
+                if (nxtCols.length >= 13 && !rDDO) rDDO = nxtCols[12].trim();
+                j++;
+              }
+
+              if (rType) currType = normalizeSchemeType(rType);
+              if (rDist) currDist = normalizeDistrict(rDist);
+              if (rTreas) currTreasury = rTreas;
+              if (rDDO) currDDO = rDDO;
+
+              var amtVal = parseFloat(rAmtStr.replace(/,/g, "")) || 0;
+              var rec = {
+                fileNo: fileNo,
+                compNo: compNo,
+                slNo: rawSl,
+                schemeId: schID,
+                schemeName: schName,
+                schemeType: currType || defaultType,
+                district: currDist || defaultDist,
+                block: rBlock,
+                gp: rGP,
+                mouza: rMouza,
+                jlNo: rJL,
+                plotNo: rPlot,
+                aaAmount: amtVal,
+                treasury: currTreasury,
+                ddo: currDDO
+              };
+
+              if (!dictFileSchemes[schID]) fileSchemeOrder.push(schID);
+              dictFileSchemes[schID] = rec;
+              idx = j;
+            } else {
+              idx++;
+            }
+          }
+        } else {
+          // MODE B: Vertical Line-by-Line Browser Copy-Paste Parsing
+          var tokens = [];
+          for (var k = 0; k < lines.length; k++) {
+            var trimmed = lines[k].replace(/\t/g, " ").replace(/\s+/g, " ").trim();
+            if (trimmed !== "") tokens.push(trimmed);
+          }
+
+          var p = 0;
+          while (p < tokens.length) {
+            if (isVerticalHeaderStart(tokens, p)) {
+              p += 13;
+
+              while (p < tokens.length) {
+                if (isVerticalHeaderStart(tokens, p)) {
+                  p += 13;
+                  continue;
+                }
+                if (isVerticalTableEnd(tokens[p])) {
+                  break;
+                }
+
+                if (p + 1 < tokens.length && isSchemeID(tokens[p + 1])) {
+                  var vSl = tokens[p];
+                  if (vSl.indexOf("1900") > -1) {
+                    vSl = String(parseInt(vSl.split("-")[0], 10) || vSl);
+                  }
+                  var vSchId = tokens[p + 1];
+                  var vSchName = tokens[p + 2] || "";
+
+                  var cursor = p + 3;
+                  var vType = "";
+                  var vDist = "";
+
+                  // Dynamic check: if tokens[cursor] is a known scheme type OR tokens[cursor + 1] is a West Bengal district,
+                  // then Type & District are present on this row before Block.
+                  var hasTypeAndDist =
+                    (cursor < tokens.length && isKnownSchemeTypeToken(tokens[cursor])) ||
+                    (cursor + 1 < tokens.length && isKnownDistrictToken(tokens[cursor + 1]));
+
+                  if (hasTypeAndDist) {
+                    vType = tokens[cursor++] || "";
+                    if (cursor < tokens.length) {
+                      vDist = tokens[cursor++] || "";
+                    }
+                  } else if (cursor < tokens.length && isKnownDistrictToken(tokens[cursor])) {
+                    // Edge case where Type was merged/blank on this row, but District was repeated
+                    vDist = tokens[cursor++] || "";
+                  }
+
+                  var vBlock = tokens[cursor++] || "";
+                  var vGP = tokens[cursor++] || "";
+                  var vMouza = tokens[cursor++] || "";
+                  var vJL = tokens[cursor++] || "";
+                  var vPlot = fixExcelDatePlot(tokens[cursor++] || "");
+                  var vAmtStr = tokens[cursor++] || "0";
+                  var vAmtVal = parseFloat(vAmtStr.replace(/,/g, "")) || 0;
+
+                  // Consume optional Treasury & D.D.O lines if they appear before the next row/header/total
+                  var vTreas = "";
+                  var vDDO = "";
+                  while (
+                    cursor < tokens.length &&
+                    !isVerticalHeaderStart(tokens, cursor) &&
+                    !isVerticalTableEnd(tokens[cursor]) &&
+                    !(cursor + 1 < tokens.length && isSchemeID(tokens[cursor + 1]))
+                  ) {
+                    if (!vTreas) {
+                      vTreas = tokens[cursor];
+                    } else if (!vDDO) {
+                      vDDO = tokens[cursor];
+                    }
+                    cursor++;
+                  }
+
+                  if (vType) currType = normalizeSchemeType(vType);
+                  if (vDist) currDist = normalizeDistrict(vDist);
+                  if (vTreas) currTreasury = vTreas;
+                  if (vDDO) currDDO = vDDO;
+
+                  var vRec = {
+                    fileNo: fileNo,
+                    compNo: compNo,
+                    slNo: vSl,
+                    schemeId: vSchId,
+                    schemeName: vSchName,
+                    schemeType: currType || defaultType,
+                    district: currDist || defaultDist,
+                    block: vBlock,
+                    gp: vGP,
+                    mouza: vMouza,
+                    jlNo: vJL,
+                    plotNo: vPlot,
+                    aaAmount: vAmtVal,
+                    treasury: currTreasury,
+                    ddo: currDDO
+                  };
+
+                  if (!dictFileSchemes[vSchId]) fileSchemeOrder.push(vSchId);
+                  dictFileSchemes[vSchId] = vRec;
+                  p = cursor;
+                } else {
+                  p++;
+                }
+              }
+            } else {
+              p++;
+            }
+          }
+        }
+
+        var calcTotal = 0;
+        for (var s = 0; s < fileSchemeOrder.length; s++) {
+          var sid = fileSchemeOrder[s];
+          var item = dictFileSchemes[sid];
+          calcTotal += item.aaAmount;
+          if (!dictAllSchemes[sid]) schemeOrder.push(sid);
+          dictAllSchemes[sid] = item;
+        }
+
+        var status = "OK";
+        if (!hasStatedTotal) {
+          status = "INCOMPLETE / TRUNCATED (Missing stated total)";
+        } else if (Math.abs(calcTotal - statedTotal) > 0.5) {
+          status = "MISMATCH (Calc: " + formatINR(calcTotal) + " vs Stated: " + formatINR(statedTotal) + ")";
+        }
+
+        return {
+          fileNo: fileNo,
+          compNo: compNo,
+          subject: subj,
+          schemeCount: fileSchemeOrder.length,
+          calcTotal: calcTotal,
+          statedTotal: statedTotal,
+          status: status,
+          exceedsLimit: calcTotal > AA_LIMIT || statedTotal > AA_LIMIT
+        };
+      }
+
+      // =========================================================================
+      // MAIN RECONCILIATION PIPELINE
+      // =========================================================================
+      function processRawText(rawText, fileName) {
+        state.fileName = fileName || "eoffice_dump.txt";
+        var blocks = splitIntoBlocks(rawText);
+        state.rawBlocks = blocks;
+
+        var groups = {};
+        for (var i = 0; i < blocks.length; i++) {
+          var b = blocks[i];
+          var key = b.dedupKey;
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(b);
+        }
+
+        var dupGroups = {};
+        Object.keys(groups).forEach(function (k) {
+          if (groups[k].length > 1) dupGroups[k] = groups[k];
+        });
+        state.duplicateGroups = dupGroups;
+
+        var latestMap = {};
+        var blockOrder = [];
+        for (var j = 0; j < blocks.length; j++) {
+          var blk = blocks[j];
+          if (!latestMap[blk.dedupKey]) blockOrder.push(blk.dedupKey);
+          latestMap[blk.dedupKey] = blk;
+        }
+
+        state.uniqueBlocks = blockOrder.map(function (k) { return latestMap[k]; });
+
+        var dictAllSchemes = {};
+        var schemeOrder = [];
+        var verifications = [];
+
+        for (var u = 0; u < state.uniqueBlocks.length; u++) {
+          var vRec = parseSingleFileBlock(state.uniqueBlocks[u], dictAllSchemes, schemeOrder);
+          verifications.push(vRec);
+        }
+
+        state.verifications = verifications;
+        state.schemes = schemeOrder.map(function (id) { return dictAllSchemes[id]; });
+
+        var distSet = {};
+        var typeSet = {};
+        var exceedList = [];
+
+        state.schemes.forEach(function (s) {
+          if (s.district) distSet[s.district] = true;
+          if (s.schemeType) typeSet[s.schemeType] = true;
+          if (s.aaAmount > AA_LIMIT) {
+            exceedList.push("Scheme " + s.schemeId + " (" + s.schemeName + " — ₹" + formatINR(s.aaAmount) + ")");
+          }
+        });
+
+        state.verifications.forEach(function (v) {
+          if (v.calcTotal > AA_LIMIT || v.statedTotal > AA_LIMIT) {
+            exceedList.push("File " + v.fileNo + " [Comp #" + (v.compNo || "N/A") + "] (₹" + formatINR(Math.max(v.calcTotal, v.statedTotal)) + ")");
+          }
+        });
+
+        state.districts = Object.keys(distSet);
+        state.schemeTypes = Object.keys(typeSet);
+        state.exceedItems = exceedList;
+
+        updateUI();
+      }
+
+      // =========================================================================
+      // DUPLICATE REMOVAL & RECTIFIED .TXT EXPORT
+      // =========================================================================
+      function deleteAllDuplicateBlocks() {
+        if (Object.keys(state.duplicateGroups).length === 0) return;
+        var lastIndexByKey = {};
+        state.rawBlocks.forEach(function (b, idx) {
+          lastIndexByKey[b.dedupKey] = idx;
+        });
+        var keptLines = [];
+        state.rawBlocks.forEach(function (b, idx) {
+          if (lastIndexByKey[b.dedupKey] === idx) {
+            keptLines.push(b.lines.join("\r\n"));
+          }
+        });
+        processRawText(keptLines.join("\r\n"), state.fileName);
+      }
+
+      function deleteSingleRawBlock(blockIdx) {
+        if (state.rawBlocks.length <= 1) return;
+        var remaining = state.rawBlocks.filter(function (b) { return b.index !== blockIdx; });
+        var rebuilt = remaining.map(function (b) { return b.lines.join("\r\n"); }).join("\r\n");
+        processRawText(rebuilt, state.fileName);
+      }
+
+      function downloadRectifiedTxt() {
+        if (state.uniqueBlocks.length === 0) return;
+        var content = state.uniqueBlocks.map(function (b) { return b.lines.join("\r\n"); }).join("\r\n");
+        var baseName = state.fileName.replace(/\.txt$/i, "");
+        triggerDownload(content, baseName + "_rectified.txt", "text/plain;charset=utf-8");
+      }
+
+      function triggerDownload(content, filename, mime) {
+        var blob = new Blob([content], { type: mime });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      }
+
+      // =========================================================================
+      // UI RENDERING
+      // =========================================================================
+      function updateUI() {
+        var hasData = state.schemes.length > 0 || state.verifications.length > 0;
+        document.getElementById("btnExportExcel").disabled = !hasData;
+        document.getElementById("btnDownloadRectifiedTop").disabled = !hasData;
+
+        var badge = document.getElementById("fileStatusBadge");
+        badge.textContent = "Loaded: " + state.fileName + " (" + state.rawBlocks.length + " blocks → " + state.uniqueBlocks.length + " unique files)";
+        badge.className = "status-pill ready";
+
+        var totalAA = state.schemes.reduce(function (acc, s) { return acc + s.aaAmount; }, 0);
+        var dupKeys = Object.keys(state.duplicateGroups);
+
+        document.getElementById("kpiFiles").textContent = state.uniqueBlocks.length;
+        document.getElementById("kpiFilesSub").textContent = state.rawBlocks.length + " raw file blocks parsed";
+        document.getElementById("kpiSchemes").textContent = state.schemes.length;
+        document.getElementById("kpiDistrictsSub").textContent = "Across " + state.districts.length + " districts";
+        document.getElementById("kpiTotalAA").textContent = "₹" + formatINR(totalAA);
+        document.getElementById("kpiDupCount").textContent = dupKeys.length;
+        document.getElementById("kpiDupSub").textContent = dupKeys.length > 0 ? "Latest snapshot retained" : "No duplicate blocks";
+        document.getElementById("kpiExceedCount").textContent = state.exceedItems.length;
+        document.getElementById("kpiExceedSub").textContent = state.exceedItems.length > 0 ? "Exceeds ₹2,00,00,000 limit" : "All within ₹2.00 Cr ceiling";
+
+        var dupBanner = document.getElementById("dupWarningBanner");
+        if (dupKeys.length > 0) {
+          var details = dupKeys.map(function (k) {
+            var arr = state.duplicateGroups[k];
+            var files = arr.map(function (x) { return x.fileNo; }).join(" & ");
+            return "<strong>Computer No. " + escapeHtml(k) + "</strong> (" + arr.length + " occurrences: " + escapeHtml(files) + ")";
+          }).join("; ");
+          document.getElementById("dupWarningText").innerHTML =
+            "The following Computer Number(s) appeared multiple times in your input file (latest snapshot retained for calculations): " + details + ".";
+          dupBanner.style.display = "flex";
+        } else {
+          dupBanner.style.display = "none";
+        }
+
+        var aaBanner = document.getElementById("aaLimitBanner");
+        if (state.exceedItems.length > 0) {
+          document.getElementById("aaLimitText").innerHTML =
+            "<strong>" + state.exceedItems.length + " item(s)</strong> exceed the ₹2,00,00,000 Administrative Approval threshold: " +
+            escapeHtml(state.exceedItems.slice(0, 6).join(" | ")) +
+            (state.exceedItems.length > 6 ? " ...and " + (state.exceedItems.length - 6) + " more." : "");
+          aaBanner.style.display = "flex";
+        } else {
+          aaBanner.style.display = "none";
+        }
+
+        populateFilterDropdowns();
+        renderSummaryTable();
+        renderBreakdownTable();
+        renderVerificationTable();
+        renderCleanedDataTable();
+        renderIssuesLogTable();
+        renderRawBlocksTable();
+      }
+
+      function populateFilterDropdowns() {
+        var distOpts = '<option value="">All Districts</option>' +
+          state.districts.map(function (d) { return '<option value="' + escapeHtml(d) + '">' + escapeHtml(d) + '</option>'; }).join("");
+        var typeOpts = '<option value="">All Scheme Types</option>' +
+          state.schemeTypes.map(function (t) { return '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>'; }).join("");
+
+        document.getElementById("fltBdDistrict").innerHTML = distOpts;
+        document.getElementById("fltBdType").innerHTML = typeOpts;
+        document.getElementById("fltDataDistrict").innerHTML = distOpts;
+        document.getElementById("fltDataType").innerHTML = typeOpts;
+      }
+
+      function renderSummaryTable() {
+        var types = state.schemeTypes;
+        var dists = state.districts;
+        var thead = document.getElementById("theadSummary");
+        var tbody = document.getElementById("tbodySummary");
+        var tfoot = document.getElementById("tfootSummary");
+
+        if (dists.length === 0) {
+          thead.innerHTML = "";
+          tbody.innerHTML = '<tr><td class="empty-state">No scheme records found.</td></tr>';
+          tfoot.innerHTML = "";
+          return;
+        }
+
+        var hHtml = "<tr><th style='width:65px'>Sl. No.</th><th>District</th>";
+        types.forEach(function (t) { hHtml += "<th>" + escapeHtml(t) + " (₹)</th>"; });
+        hHtml += "<th>Total AA Amount (₹)</th><th>No. of Schemes</th></tr>";
+        thead.innerHTML = hHtml;
+
+        var colTotals = {};
+        types.forEach(function (t) { colTotals[t] = 0; });
+        var grandAA = 0;
+        var grandCnt = 0;
+
+        var bHtml = "";
+        dists.forEach(function (d, idx) {
+          var rowAA = 0;
+          var rowCnt = 0;
+          var cells = "";
+          types.forEach(function (t) {
+            var sum = 0;
+            state.schemes.forEach(function (s) {
+              if (s.district === d && s.schemeType === t) {
+                sum += s.aaAmount;
+                rowCnt++;
+              }
+            });
+            colTotals[t] += sum;
+            rowAA += sum;
+            cells += '<td class="num">' + formatINR(sum) + "</td>";
+          });
+          grandAA += rowAA;
+          grandCnt += rowCnt;
+
+          bHtml += "<tr>" +
+            '<td class="ctr">' + (idx + 1) + "</td>" +
+            '<td class="bold">' + escapeHtml(d) + "</td>" +
+            cells +
+            '<td class="num bold">' + formatINR(rowAA) + "</td>" +
+            '<td class="ctr bold">' + rowCnt + "</td>" +
+            "</tr>";
+        });
+        tbody.innerHTML = bHtml;
+
+        var fHtml = '<tr><td class="ctr">—</td><td>GRAND TOTAL</td>';
+        types.forEach(function (t) { fHtml += '<td class="num">' + formatINR(colTotals[t]) + "</td>"; });
+        fHtml += '<td class="num">' + formatINR(grandAA) + '</td><td class="ctr">' + grandCnt + "</td></tr>";
+        tfoot.innerHTML = fHtml;
+      }
+
+      function computeBreakdownRows() {
+        var fDist = document.getElementById("fltBdDistrict").value;
+        var fType = document.getElementById("fltBdType").value;
+        var totalAllAA = state.schemes.reduce(function (a, s) { return a + s.aaAmount; }, 0);
+
+        var rows = [];
+        state.districts.forEach(function (d) {
+          if (fDist && d !== fDist) return;
+          state.schemeTypes.forEach(function (t) {
+            if (fType && t !== fType) return;
+            var cnt = 0;
+            var amt = 0;
+            state.schemes.forEach(function (s) {
+              if (s.district === d && s.schemeType === t) {
+                cnt++;
+                amt += s.aaAmount;
+              }
+            });
+            if (cnt > 0) {
+              rows.push({
+                district: d,
+                schemeType: t,
+                count: cnt,
+                amount: amt,
+                share: totalAllAA > 0 ? (amt / totalAllAA) * 100 : 0
+              });
+            }
+          });
+        });
+        return rows;
+      }
+
+      function renderBreakdownTable() {
+        var rows = computeBreakdownRows();
+        var showSub = document.getElementById("chkBdSubtotals").checked;
+        var tbody = document.getElementById("tbodyBreakdown");
+        var tfoot = document.getElementById("tfootBreakdown");
+
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No matching District &amp; Scheme Type records.</td></tr>';
+          tfoot.innerHTML = "";
+          return;
+        }
+
+        var html = "";
+        var totCnt = 0;
+        var totAmt = 0;
+        var totShare = 0;
+
+        for (var i = 0; i < rows.length; i++) {
+          var r = rows[i];
+          totCnt += r.count;
+          totAmt += r.amount;
+          totShare += r.share;
+
+          html += "<tr>" +
+            '<td class="ctr">' + (i + 1) + "</td>" +
+            '<td class="bold">' + escapeHtml(r.district) + "</td>" +
+            "<td>" + escapeHtml(r.schemeType) + "</td>" +
+            '<td class="ctr bold">' + r.count + "</td>" +
+            '<td class="num bold">' + formatINR(r.amount) + "</td>" +
+            '<td class="num">' + r.share.toFixed(2) + "%</td>" +
+            "</tr>";
+
+          var isLastInDistrict = (i === rows.length - 1) || (rows[i + 1].district !== r.district);
+          if (showSub && isLastInDistrict) {
+            var dRows = rows.filter(function (x) { return x.district === r.district; });
+            if (dRows.length > 1) {
+              var subCnt = dRows.reduce(function (a, x) { return a + x.count; }, 0);
+              var subAmt = dRows.reduce(function (a, x) { return a + x.amount; }, 0);
+              var subShr = dRows.reduce(function (a, x) { return a + x.share; }, 0);
+              html += '<tr class="row-subtotal">' +
+                '<td class="ctr">Sub</td>' +
+                '<td colspan="2">' + escapeHtml(r.district) + " Subtotal</td>" +
+                '<td class="ctr">' + subCnt + "</td>" +
+                '<td class="num">' + formatINR(subAmt) + "</td>" +
+                '<td class="num">' + subShr.toFixed(2) + "%</td>" +
+                "</tr>";
+            }
+          }
+        }
+        tbody.innerHTML = html;
+
+        tfoot.innerHTML = "<tr>" +
+          '<td class="ctr">—</td>' +
+          '<td colspan="2">GRAND TOTAL (' + rows.length + " District-Type Groups)</td>" +
+          '<td class="ctr">' + totCnt + "</td>" +
+          '<td class="num">' + formatINR(totAmt) + "</td>" +
+          '<td class="num">' + totShare.toFixed(2) + "%</td>" +
+          "</tr>";
+      }
+
+      function renderVerificationTable() {
+        var tbody = document.getElementById("tbodyVerification");
+        var tfoot = document.getElementById("tfootVerification");
+
+        if (state.verifications.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No file blocks parsed.</td></tr>';
+          tfoot.innerHTML = "";
+          return;
+        }
+
+        var totSch = 0;
+        var totCalc = 0;
+        var totStated = 0;
+
+        var html = state.verifications.map(function (v) {
+          totSch += v.schemeCount;
+          totCalc += v.calcTotal;
+          totStated += v.statedTotal;
+
+          var isDup = Boolean(state.duplicateGroups[v.compNo || v.fileNo]);
+          var rowCls = v.exceedsLimit ? "row-exceed" : (isDup ? "row-dup" : "");
+          var stBadge = v.status === "OK"
+            ? '<span class="badge badge-ok">OK</span>'
+            : '<span class="badge badge-warn">' + escapeHtml(v.status) + "</span>";
+          var aaBadge = v.exceedsLimit
+            ? '<span class="badge badge-danger">EXCEEDS ₹2 CR</span>'
+            : '<span class="badge badge-ok">Within ₹2 Cr</span>';
+
+          return '<tr class="' + rowCls + '">' +
+            "<td>" + escapeHtml(v.fileNo) + "</td>" +
+            '<td class="ctr bold">' + escapeHtml(v.compNo || "—") + (isDup ? ' <span class="badge badge-warn">DUP</span>' : "") + "</td>" +
+            "<td>" + escapeHtml(v.subject) + "</td>" +
+            '<td class="ctr bold">' + v.schemeCount + "</td>" +
+            '<td class="num bold">' + formatINR(v.calcTotal) + "</td>" +
+            '<td class="num">' + formatINR(v.statedTotal) + "</td>" +
+            '<td class="ctr">' + stBadge + "</td>" +
+            '<td class="ctr">' + aaBadge + "</td>" +
+            "</tr>";
+        }).join("");
+
+        tbody.innerHTML = html;
+        tfoot.innerHTML = "<tr>" +
+          '<td colspan="3">TOTAL ACROSS ' + state.verifications.length + " UNIQUE FILES</td>" +
+          '<td class="ctr">' + totSch + "</td>" +
+          '<td class="num">' + formatINR(totCalc) + "</td>" +
+          '<td class="num">' + formatINR(totStated) + "</td>" +
+          '<td colspan="2" class="ctr">—</td>' +
+          "</tr>";
+      }
+
+      function renderCleanedDataTable() {
+        var tbody = document.getElementById("tbodyCleanedData");
+        var tfoot = document.getElementById("tfootCleanedData");
+
+        var q = document.getElementById("fltDataSearch").value.trim().toLowerCase();
+        var fDist = document.getElementById("fltDataDistrict").value;
+        var fType = document.getElementById("fltDataType").value;
+        var exceedOnly = document.getElementById("chkDataExceedOnly").checked;
+
+        var filtered = state.schemes.filter(function (s) {
+          if (fDist && s.district !== fDist) return false;
+          if (fType && s.schemeType !== fType) return false;
+          if (exceedOnly && s.aaAmount <= AA_LIMIT) return false;
+          if (q) {
+            var hay = (s.schemeId + " " + s.schemeName + " " + s.mouza + " " + s.block + " " + s.fileNo + " " + s.compNo).toLowerCase();
+            if (hay.indexOf(q) === -1) return false;
+          }
+          return true;
+        });
+
+        if (filtered.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="16" class="empty-state">No scheme rows match current filters.</td></tr>';
+          tfoot.innerHTML = "";
+          return;
+        }
+
+        var sumAA = 0;
+        var html = filtered.map(function (s) {
+          sumAA += s.aaAmount;
+          var over = s.aaAmount > AA_LIMIT;
+          return '<tr class="' + (over ? "row-exceed" : "") + '">' +
+            "<td>" + escapeHtml(s.fileNo) + "</td>" +
+            '<td class="ctr bold">' + escapeHtml(s.compNo) + "</td>" +
+            '<td class="ctr">' + escapeHtml(s.slNo) + "</td>" +
+            '<td class="bold">' + escapeHtml(s.schemeId) + "</td>" +
+            "<td>" + escapeHtml(s.schemeName) + "</td>" +
+            "<td>" + escapeHtml(s.schemeType) + "</td>" +
+            '<td class="bold">' + escapeHtml(s.district) + "</td>" +
+            "<td>" + escapeHtml(s.block) + "</td>" +
+            "<td>" + escapeHtml(s.gp) + "</td>" +
+            "<td>" + escapeHtml(s.mouza) + "</td>" +
+            '<td class="ctr">' + escapeHtml(s.jlNo) + "</td>" +
+            '<td class="ctr">' + escapeHtml(s.plotNo) + "</td>" +
+            '<td class="num bold">' + formatINR(s.aaAmount) + "</td>" +
+            "<td>" + escapeHtml(s.treasury) + "</td>" +
+            "<td>" + escapeHtml(s.ddo) + "</td>" +
+            '<td class="ctr">' + (over ? '<span class="badge badge-danger">&gt; ₹2 Cr</span>' : '<span class="badge badge-ok">OK</span>') + "</td>" +
+            "</tr>";
+        }).join("");
+
+        tbody.innerHTML = html;
+        tfoot.innerHTML = "<tr>" +
+          '<td colspan="12">TOTAL (' + filtered.length + " SHOWN SCHEMES)</td>" +
+          '<td class="num">' + formatINR(sumAA) + "</td>" +
+          '<td colspan="3"></td>' +
+          "</tr>";
+      }
+
+      function renderIssuesLogTable() {
+        var dupList = Object.keys(state.duplicateGroups);
+        var dupDesc = dupList.length > 0
+          ? dupList.map(function (k) { return "Comp No. " + k + " (" + state.duplicateGroups[k].length + "x)"; }).join(", ")
+          : "None currently active";
+
+        var logs = [
+          ["1. Duplicate File Dumps", dupDesc, "Entire e-Office Inner Pages pasted more than once in source dump.", "Deduplicated by Computer No.; retained latest snapshot & enabled block deletion."],
+          ["2. Duplicate Revision Tables", "Files with Note #4 / Note #9 / Note #11 tables", "Both initial Note #1 and revised Note #3/#4/#9/#11 tables exist in same file.", "Overwrote Note #1 rows with revised Note rows keyed by Scheme ID."],
+          ["3. Dynamic Scheme Type & District Detection", "All scheme types (WDS, TW, PDW, Jhora, WMS, CD)", "New scheme types like Jhora/WMS previously shifted vertical line offsets.", "Detects Type & District dynamically by matching West Bengal district tokens."],
+          ["4. Blank Merged Columns", "All files (Type, District, Treasury, D.D.O)", "Vertically merged columns appear only on Sl. No. 1 or after page breaks.", "Forward-filled merged values and standardized District & Scheme Type names."],
+          ["5. Excel Date Auto-Format", "Sl. No. ('03-01-1900') & Plot No. ('Jan-88')", "Excel auto-converted serial numbers and slash plots into calendar dates.", "Restored original numeric/slash text and exported as explicit string cells."],
+          ["6. ₹2,00,00,000 AA Threshold Check", state.exceedItems.length + " item(s) flagged", "Administrative Approval ceiling check at ₹2.00 Crore per file/scheme.", "Highlighted exceeding files and schemes in banners, UI tables, and Excel export."]
+        ];
+
+        document.getElementById("tbodyIssuesLog").innerHTML = logs.map(function (r) {
+          return "<tr>" +
+            '<td class="bold">' + escapeHtml(r[0]) + "</td>" +
+            "<td>" + escapeHtml(r[1]) + "</td>" +
+            "<td>" + escapeHtml(r[2]) + "</td>" +
+            "<td>" + escapeHtml(r[3]) + "</td>" +
+            "</tr>";
+        }).join("");
+      }
+
+      function renderRawBlocksTable() {
+        var tbody = document.getElementById("tbodyRawBlocks");
+        if (state.rawBlocks.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No blocks loaded.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = state.rawBlocks.map(function (b) {
+          var grp = state.duplicateGroups[b.dedupKey];
+          var isDup = grp && grp.length > 1;
+          var isLatest = isDup && grp[grp.length - 1].index === b.index;
+          var statusBadge = !isDup
+            ? '<span class="badge badge-ok">Unique</span>'
+            : (isLatest
+              ? '<span class="badge badge-info">Duplicate (Latest Kept)</span>'
+              : '<span class="badge badge-warn">Duplicate (Superseded)</span>');
+
+          var actionBtn = isDup
+            ? '<button class="btn btn-danger-outline" data-del-block="' + b.index + '" type="button">Delete Block</button>'
+            : "—";
+
+          return '<tr class="' + (isDup ? "row-dup" : "") + '">' +
+            '<td class="ctr bold">' + b.index + "</td>" +
+            "<td>" + escapeHtml(b.fileNo) + "</td>" +
+            '<td class="ctr bold">' + escapeHtml(b.compNo || "—") + "</td>" +
+            "<td>" + escapeHtml(b.subject) + "</td>" +
+            '<td class="ctr">' + b.lines.length + "</td>" +
+            '<td class="ctr">' + statusBadge + "</td>" +
+            '<td class="ctr">' + actionBtn + "</td>" +
+            "</tr>";
+        }).join("");
+      }
+
+      // =========================================================================
+      // COLORFUL STYLED MULTI-SHEET EXCEL EXPORT (.XLSX) WITH CELL BORDERS
+      // =========================================================================
+      function exportStyledExcel() {
+        if (typeof XLSX === "undefined") {
+          alert("SheetJS library could not be loaded. Please check your internet connection.");
+          return;
+        }
+
+        var wb = XLSX.utils.book_new();
+        var borderAll = {
+          top: { style: "thin", color: { rgb: "94A3B8" } },
+          bottom: { style: "thin", color: { rgb: "94A3B8" } },
+          left: { style: "thin", color: { rgb: "94A3B8" } },
+          right: { style: "thin", color: { rgb: "94A3B8" } }
+        };
+        var totalBorder = {
+          top: { style: "medium", color: { rgb: "334155" } },
+          bottom: { style: "double", color: { rgb: "334155" } },
+          left: { style: "thin", color: { rgb: "94A3B8" } },
+          right: { style: "thin", color: { rgb: "94A3B8" } }
+        };
+
+        function makeHeaderStyle(hexBg) {
+          return {
+            font: { name: "Calibri", sz: 11, bold: true, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: hexBg } },
+            alignment: { horizontal: "center", vertical: "center", wrapText: true },
+            border: borderAll
+          };
+        }
+
+        function makeTitleStyle(hexBg) {
+          return {
+            font: { name: "Calibri", sz: 13, bold: true, color: { rgb: "FFFFFF" } },
+            fill: { fgColor: { rgb: hexBg } },
+            alignment: { horizontal: "left", vertical: "center" },
+            border: borderAll
+          };
+        }
+
+        function makeTotalStyle(hexBg, hexFg, align, numFmt) {
+          var st = {
+            font: { name: "Calibri", sz: 10, bold: true, color: { rgb: hexFg } },
+            fill: { fgColor: { rgb: hexBg } },
+            alignment: { horizontal: align || "left", vertical: "center" },
+            border: totalBorder
+          };
+          if (numFmt) st.numFmt = numFmt;
+          return st;
+        }
+
+        function makeCellStyle(rowIdx, align, numFmt, isBold, customBg, customFg) {
+          var bg = customBg || (rowIdx % 2 === 1 ? "F8FAFC" : "FFFFFF");
+          var st = {
+            font: { name: "Calibri", sz: 10, bold: !!isBold, color: { rgb: customFg || "0F172A" } },
+            fill: { fgColor: { rgb: bg } },
+            alignment: { horizontal: align || "left", vertical: "center", wrapText: true },
+            border: borderAll
+          };
+          if (numFmt) st.numFmt = numFmt;
+          return st;
+        }
+
+        var maxDataRow = state.schemes.length + 1;
+
+        // SHEET 1: District_Scheme_Summary
+        var types = state.schemeTypes;
+        var dists = state.districts;
+        var sumRows = [];
+        var totColsCount = types.length + 4;
+
+        var titleRow1 = ["WBADMIP PHASE-II: DISTRICT-WISE & SCHEME-WISE ADMINISTRATIVE APPROVAL SUMMARY"];
+        while (titleRow1.length < totColsCount) titleRow1.push("");
+        sumRows.push(titleRow1);
+        sumRows.push(new Array(totColsCount).fill(""));
+
+        var sumHdr = ["Sl. No.", "District"];
+        types.forEach(function (t) { sumHdr.push(t + " (Rs.)"); });
+        sumHdr.push("Total AA Amount (Rs.)", "No. of Schemes");
+        sumRows.push(sumHdr);
+
+        dists.forEach(function (d, idx) {
+          var rNum = idx + 4;
+          var row = [idx + 1, d];
+          types.forEach(function (t) {
+            row.push({
+              t: "n",
+              f: 'SUMIFS(Cleaned_Scheme_Data!$M$2:$M$' + maxDataRow + ',Cleaned_Scheme_Data!$G$2:$G$' + maxDataRow + ',$B' + rNum + ',Cleaned_Scheme_Data!$F$2:$F$' + maxDataRow + ',"' + t + '")'
+            });
+          });
+          var firstTypeCol = XLSX.utils.encode_col(2);
+          var lastTypeCol = XLSX.utils.encode_col(1 + types.length);
+          row.push({ t: "n", f: "SUM(" + firstTypeCol + rNum + ":" + lastTypeCol + rNum + ")" });
+          row.push({ t: "n", f: 'COUNTIF(Cleaned_Scheme_Data!$G$2:$G$' + maxDataRow + ',$B' + rNum + ")" });
+          sumRows.push(row);
+        });
+
+        var gRowNum = dists.length + 4;
+        var gRow = ["", "GRAND TOTAL"];
+        for (var c = 2; c < totColsCount; c++) {
+          var colLet = XLSX.utils.encode_col(c);
+          gRow.push({ t: "n", f: "SUM(" + colLet + "4:" + colLet + (gRowNum - 1) + ")" });
+        }
+        sumRows.push(gRow);
+
+        var wsSum = XLSX.utils.aoa_to_sheet(sumRows);
+        wsSum["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: totColsCount - 1 } }];
+        wsSum["!rows"] = [{ hpt: 28 }, { hpt: 10 }, { hpt: 28 }];
+
+        for (var sc = 0; sc < totColsCount; sc++) {
+          wsSum[XLSX.utils.encode_cell({ r: 0, c: sc })].s = makeTitleStyle("1E3A8A");
+          wsSum[XLSX.utils.encode_cell({ r: 2, c: sc })].s = makeHeaderStyle("1E3A8A");
+        }
+        for (var sr = 3; sr < gRowNum - 1; sr++) {
+          wsSum[XLSX.utils.encode_cell({ r: sr, c: 0 })].s = makeCellStyle(sr, "center", "0", false);
+          wsSum[XLSX.utils.encode_cell({ r: sr, c: 1 })].s = makeCellStyle(sr, "left", null, true);
+          for (var tc = 2; tc < totColsCount - 1; tc++) {
+            wsSum[XLSX.utils.encode_cell({ r: sr, c: tc })].s = makeCellStyle(sr, "right", "#,##0", tc === totColsCount - 2);
+          }
+          wsSum[XLSX.utils.encode_cell({ r: sr, c: totColsCount - 1 })].s = makeCellStyle(sr, "center", "#,##0", true);
+        }
+        wsSum[XLSX.utils.encode_cell({ r: gRowNum - 1, c: 0 })].s = makeTotalStyle("DBEAFE", "1E3A8A", "center");
+        wsSum[XLSX.utils.encode_cell({ r: gRowNum - 1, c: 1 })].s = makeTotalStyle("DBEAFE", "1E3A8A", "left");
+        for (var gc = 2; gc < totColsCount - 1; gc++) {
+          wsSum[XLSX.utils.encode_cell({ r: gRowNum - 1, c: gc })].s = makeTotalStyle("DBEAFE", "1E3A8A", "right", "#,##0");
+        }
+        wsSum[XLSX.utils.encode_cell({ r: gRowNum - 1, c: totColsCount - 1 })].s = makeTotalStyle("DBEAFE", "1E3A8A", "center", "#,##0");
+        wsSum["!cols"] = [{ wch: 10 }, { wch: 24 }].concat(types.map(function () { return { wch: 20 }; })).concat([{ wch: 22 }, { wch: 16 }]);
+        XLSX.utils.book_append_sheet(wb, wsSum, "District_Scheme_Summary");
+
+        // SHEET 2: District_Type_Breakdown
+        var bdPairs = [];
+        dists.forEach(function (d) {
+          types.forEach(function (t) {
+            var exists = state.schemes.some(function (s) { return s.district === d && s.schemeType === t; });
+            if (exists) bdPairs.push({ d: d, t: t });
+          });
+        });
+
+        var bdRows = [
+          ["WBADMIP PHASE-II: DISTRICT-WISE & SCHEME-TYPE-WISE SCHEME COUNT & AA BREAKDOWN", "", "", "", "", ""],
+          ["", "", "", "", "", ""],
+          ["Sl. No.", "District", "Type of Scheme", "No. of Schemes", "Administrative Approval (Rs.)", "% Share of Total AA"]
+        ];
+        var bdTotRowNum = bdPairs.length + 4;
+        bdPairs.forEach(function (pair, idx) {
+          var rNum = idx + 4;
+          bdRows.push([
+            idx + 1,
+            pair.d,
+            pair.t,
+            { t: "n", f: "COUNTIFS(Cleaned_Scheme_Data!$G$2:$G$" + maxDataRow + ",$B" + rNum + ",Cleaned_Scheme_Data!$F$2:$F$" + maxDataRow + ",$C" + rNum + ")" },
+            { t: "n", f: "SUMIFS(Cleaned_Scheme_Data!$M$2:$M$" + maxDataRow + ",Cleaned_Scheme_Data!$G$2:$G$" + maxDataRow + ",$B" + rNum + ",Cleaned_Scheme_Data!$F$2:$F$" + maxDataRow + ",$C" + rNum + ")" },
+            { t: "n", f: "E" + rNum + "/$E$" + bdTotRowNum }
+          ]);
+        });
+        bdRows.push([
+          "",
+          "GRAND TOTAL",
+          "",
+          { t: "n", f: "SUM(D4:D" + (bdTotRowNum - 1) + ")" },
+          { t: "n", f: "SUM(E4:E" + (bdTotRowNum - 1) + ")" },
+          { t: "n", f: "SUM(F4:F" + (bdTotRowNum - 1) + ")" }
+        ]);
+
+        var wsBd = XLSX.utils.aoa_to_sheet(bdRows);
+        wsBd["!merges"] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 5 } }];
+        wsBd["!rows"] = [{ hpt: 28 }, { hpt: 10 }, { hpt: 28 }];
+
+        for (var bc = 0; bc < 6; bc++) {
+          wsBd[XLSX.utils.encode_cell({ r: 0, c: bc })].s = makeTitleStyle("5B21B6");
+          wsBd[XLSX.utils.encode_cell({ r: 2, c: bc })].s = makeHeaderStyle("5B21B6");
+        }
+        for (var br = 3; br < bdTotRowNum - 1; br++) {
+          wsBd[XLSX.utils.encode_cell({ r: br, c: 0 })].s = makeCellStyle(br, "center", "0", false);
+          wsBd[XLSX.utils.encode_cell({ r: br, c: 1 })].s = makeCellStyle(br, "left", null, true);
+          wsBd[XLSX.utils.encode_cell({ r: br, c: 2 })].s = makeCellStyle(br, "left", null, false);
+          wsBd[XLSX.utils.encode_cell({ r: br, c: 3 })].s = makeCellStyle(br, "center", "#,##0", true);
+          wsBd[XLSX.utils.encode_cell({ r: br, c: 4 })].s = makeCellStyle(br, "right", "#,##0", true);
+          wsBd[XLSX.utils.encode_cell({ r: br, c: 5 })].s = makeCellStyle(br, "right", "0.00%", false);
+        }
+        wsBd[XLSX.utils.encode_cell({ r: bdTotRowNum - 1, c: 0 })].s = makeTotalStyle("EDE9FE", "5B21B6", "center");
+        wsBd[XLSX.utils.encode_cell({ r: bdTotRowNum - 1, c: 1 })].s = makeTotalStyle("EDE9FE", "5B21B6", "left");
+        wsBd[XLSX.utils.encode_cell({ r: bdTotRowNum - 1, c: 2 })].s = makeTotalStyle("EDE9FE", "5B21B6", "left");
+        wsBd[XLSX.utils.encode_cell({ r: bdTotRowNum - 1, c: 3 })].s = makeTotalStyle("EDE9FE", "5B21B6", "center", "#,##0");
+        wsBd[XLSX.utils.encode_cell({ r: bdTotRowNum - 1, c: 4 })].s = makeTotalStyle("EDE9FE", "5B21B6", "right", "#,##0");
+        wsBd[XLSX.utils.encode_cell({ r: bdTotRowNum - 1, c: 5 })].s = makeTotalStyle("EDE9FE", "5B21B6", "right", "0.00%");
+        wsBd["!cols"] = [{ wch: 10 }, { wch: 24 }, { wch: 22 }, { wch: 18 }, { wch: 26 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, wsBd, "District_Type_Breakdown");
+
+        // SHEET 3: File_Verification
+        var verRows = [
+          ["File No.", "Computer No.", "Subject", "Schemes Extracted", "Calculated Total (Rs.)", "Stated File Total (Rs.)", "Verification Status", "AA > Rs. 2 Cr Flag"]
+        ];
+        state.verifications.forEach(function (v) {
+          verRows.push([
+            v.fileNo,
+            v.compNo ? Number(v.compNo) || v.compNo : "",
+            v.subject,
+            v.schemeCount,
+            v.calcTotal,
+            v.statedTotal,
+            v.status,
+            v.exceedsLimit ? "EXCEEDS Rs. 2,00,00,000" : "Within Limit"
+          ]);
+        });
+        var vTotR = state.verifications.length + 2;
+        verRows.push([
+          "TOTAL ACROSS " + state.verifications.length + " UNIQUE FILES",
+          { t: "s", f: 'COUNTA(B2:B' + (vTotR - 1) + ') & " Computer Nos."' },
+          "",
+          { t: "n", f: "SUM(D2:D" + (vTotR - 1) + ")" },
+          { t: "n", f: "SUM(E2:E" + (vTotR - 1) + ")" },
+          { t: "n", f: "SUM(F2:F" + (vTotR - 1) + ")" },
+          "",
+          ""
+        ]);
+
+        var wsVer = XLSX.utils.aoa_to_sheet(verRows);
+        wsVer["!rows"] = [{ hpt: 28 }];
+        for (var vc = 0; vc < 8; vc++) {
+          wsVer[XLSX.utils.encode_cell({ r: 0, c: vc })].s = makeHeaderStyle("0F766E");
+        }
+        state.verifications.forEach(function (v, idx) {
+          var r = idx + 1;
+          var over = v.exceedsLimit;
+          var rowBg = over ? "FFE4E6" : null;
+          wsVer[XLSX.utils.encode_cell({ r: r, c: 0 })].s = makeCellStyle(r, "left", null, false, rowBg);
+          wsVer[XLSX.utils.encode_cell({ r: r, c: 1 })].s = makeCellStyle(r, "center", "0", true, rowBg, "1E3A8A");
+          wsVer[XLSX.utils.encode_cell({ r: r, c: 2 })].s = makeCellStyle(r, "left", null, false, rowBg);
+          wsVer[XLSX.utils.encode_cell({ r: r, c: 3 })].s = makeCellStyle(r, "center", "#,##0", true, rowBg);
+          wsVer[XLSX.utils.encode_cell({ r: r, c: 4 })].s = makeCellStyle(r, "right", "#,##0", true, rowBg);
+          wsVer[XLSX.utils.encode_cell({ r: r, c: 5 })].s = makeCellStyle(r, "right", "#,##0", false, rowBg);
+          wsVer[XLSX.utils.encode_cell({ r: r, c: 6 })].s = makeCellStyle(r, "center", null, true, v.status === "OK" ? "DCFCE7" : "FEF3C7", v.status === "OK" ? "166534" : "92400E");
+          wsVer[XLSX.utils.encode_cell({ r: r, c: 7 })].s = makeCellStyle(r, "center", null, true, over ? "FFE4E6" : "DCFCE7", over ? "9F1239" : "166534");
+        });
+        wsVer[XLSX.utils.encode_cell({ r: vTotR - 1, c: 0 })].s = makeTotalStyle("CCFBF1", "115E59", "left");
+        wsVer[XLSX.utils.encode_cell({ r: vTotR - 1, c: 1 })].s = makeTotalStyle("CCFBF1", "115E59", "center");
+        wsVer[XLSX.utils.encode_cell({ r: vTotR - 1, c: 2 })].s = makeTotalStyle("CCFBF1", "115E59", "left");
+        wsVer[XLSX.utils.encode_cell({ r: vTotR - 1, c: 3 })].s = makeTotalStyle("CCFBF1", "115E59", "center", "#,##0");
+        wsVer[XLSX.utils.encode_cell({ r: vTotR - 1, c: 4 })].s = makeTotalStyle("CCFBF1", "115E59", "right", "#,##0");
+        wsVer[XLSX.utils.encode_cell({ r: vTotR - 1, c: 5 })].s = makeTotalStyle("CCFBF1", "115E59", "right", "#,##0");
+        wsVer[XLSX.utils.encode_cell({ r: vTotR - 1, c: 6 })].s = makeTotalStyle("CCFBF1", "115E59", "center");
+        wsVer[XLSX.utils.encode_cell({ r: vTotR - 1, c: 7 })].s = makeTotalStyle("CCFBF1", "115E59", "center");
+        wsVer["!cols"] = [{ wch: 44 }, { wch: 16 }, { wch: 24 }, { wch: 16 }, { wch: 22 }, { wch: 22 }, { wch: 26 }, { wch: 22 }];
+        XLSX.utils.book_append_sheet(wb, wsVer, "File_Verification");
+
+        // SHEET 4: Cleaned_Scheme_Data
+        var dataRows = [
+          ["File No.", "Computer No.", "Sl. No.", "Scheme ID", "Name of the Scheme", "Type of Scheme", "District", "Block", "GP", "Mouza", "J.L. No.", "Plot No.", "Administrative Approval (Rs.)", "Name of the Treasury", "Name of the D.D.O", "AA > Rs. 2 Cr Flag"]
+        ];
+        state.schemes.forEach(function (s) {
+          dataRows.push([
+            s.fileNo,
+            s.compNo ? Number(s.compNo) || s.compNo : "",
+            String(s.slNo),
+            s.schemeId,
+            s.schemeName,
+            s.schemeType,
+            s.district,
+            s.block,
+            s.gp,
+            s.mouza,
+            String(s.jlNo),
+            String(s.plotNo),
+            s.aaAmount,
+            s.treasury,
+            s.ddo,
+            s.aaAmount > AA_LIMIT ? "EXCEEDS Rs. 2,00,00,000" : "OK"
+          ]);
+        });
+        var dTotR = state.schemes.length + 2;
+        dataRows.push([
+          "GRAND TOTAL (" + state.schemes.length + " UNIQUE SCHEMES)",
+          "", "", "", "", "", "", "", "", "", "", "",
+          { t: "n", f: "SUM(M2:M" + (dTotR - 1) + ")" },
+          "", "", ""
+        ]);
+
+        var wsData = XLSX.utils.aoa_to_sheet(dataRows);
+        wsData["!rows"] = [{ hpt: 28 }];
+        for (var dc = 0; dc < 16; dc++) {
+          wsData[XLSX.utils.encode_cell({ r: 0, c: dc })].s = makeHeaderStyle("312E81");
+        }
+        state.schemes.forEach(function (s, idx) {
+          var r = idx + 1;
+          var over = s.aaAmount > AA_LIMIT;
+          var rowBg = over ? "FFE4E6" : null;
+          for (var c = 0; c < 16; c++) {
+            var align = (c === 1 || c === 2 || c === 10 || c === 11 || c === 15) ? "center" : (c === 12 ? "right" : "left");
+            var fmt = c === 1 ? "0" : (c === 12 ? "#,##0" : null);
+            var bold = (c === 3 || c === 6 || c === 12 || c === 15);
+            var fg = c === 15 ? (over ? "9F1239" : "166534") : null;
+            wsData[XLSX.utils.encode_cell({ r: r, c: c })].s = makeCellStyle(r, align, fmt, bold, rowBg, fg);
+          }
+        });
+        for (var dtc = 0; dtc < 16; dtc++) {
+          wsData[XLSX.utils.encode_cell({ r: dTotR - 1, c: dtc })].s = makeTotalStyle("E0E7FF", "312E81", dtc === 12 ? "right" : "left", dtc === 12 ? "#,##0" : null);
+        }
+        wsData["!cols"] = [
+          { wch: 42 }, { wch: 15 }, { wch: 8 }, { wch: 22 }, { wch: 34 }, { wch: 18 },
+          { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 22 }, { wch: 10 }, { wch: 16 },
+          { wch: 22 }, { wch: 26 }, { wch: 36 }, { wch: 22 }
+        ];
+        XLSX.utils.book_append_sheet(wb, wsData, "Cleaned_Scheme_Data");
+
+        // SHEET 5: Issues_Fixed_Log
+        var logRows = [["Issue Category", "Affected File(s) / Scope", "Root Cause in Raw .txt", "Action Taken"]];
+        var trs = document.querySelectorAll("#tbodyIssuesLog tr");
+        trs.forEach(function (tr) {
+          var tds = tr.querySelectorAll("td");
+          if (tds.length === 4) {
+            logRows.push([tds[0].textContent, tds[1].textContent, tds[2].textContent, tds[3].textContent]);
+          }
+        });
+        var wsLog = XLSX.utils.aoa_to_sheet(logRows);
+        wsLog["!rows"] = [{ hpt: 28 }];
+        for (var lc = 0; lc < 4; lc++) {
+          wsLog[XLSX.utils.encode_cell({ r: 0, c: lc })].s = makeHeaderStyle("1E293B");
+        }
+        for (var lr = 1; lr < logRows.length; lr++) {
+          for (var lcc = 0; lcc < 4; lcc++) {
+            wsLog[XLSX.utils.encode_cell({ r: lr, c: lcc })].s = makeCellStyle(lr, "left", null, lcc === 0);
+          }
+        }
+        wsLog["!cols"] = [{ wch: 28 }, { wch: 34 }, { wch: 44 }, { wch: 48 }];
+        XLSX.utils.book_append_sheet(wb, wsLog, "Issues_Fixed_Log");
+
+        var outName = state.fileName.replace(/\.txt$/i, "") + "_Reconciled.xlsx";
+        XLSX.writeFile(wb, outName);
+      }
+
+      // =========================================================================
+      // FILE INPUT & SERVER SAMPLE.TXT HANDLERS
+      // =========================================================================
+      function handleFileObject(file) {
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          var text = decodeArrayBufferAuto(e.target.result);
+          processRawText(text, file.name);
+        };
+        reader.readAsArrayBuffer(file);
+      }
+
+      function loadServerSampleTxt() {
+        fetch("./sample.txt")
+          .then(function (resp) {
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            return resp.arrayBuffer();
+          })
+          .then(function (buf) {
+            var text = decodeArrayBufferAuto(buf);
+            processRawText(text, "sample.txt");
+          })
+          .catch(function () {
+            processRawText(BUILTIN_SAMPLE_TXT, "sample.txt (Built-in Demo)");
+          });
+      }
+
+      function downloadServerSampleTxt() {
+        fetch("./sample.txt")
+          .then(function (resp) {
+            if (!resp.ok) throw new Error("HTTP " + resp.status);
+            return resp.arrayBuffer();
+          })
+          .then(function (buf) {
+            var text = decodeArrayBufferAuto(buf);
+            triggerDownload(text, "sample.txt", "text/plain;charset=utf-8");
+          })
+          .catch(function () {
+            triggerDownload(BUILTIN_SAMPLE_TXT, "sample.txt", "text/plain;charset=utf-8");
+          });
+      }
+
+      // =========================================================================
+      // EVENT WIRING
+      // =========================================================================
+      function initApp() {
+        var fileInput = document.getElementById("fileInput");
+        document.getElementById("btnChooseFile").addEventListener("click", function () { fileInput.click(); });
+        document.getElementById("btnBrowseDrop").addEventListener("click", function () { fileInput.click(); });
+        fileInput.addEventListener("change", function (e) {
+          if (e.target.files && e.target.files[0]) handleFileObject(e.target.files[0]);
+        });
+
+        var dropZone = document.getElementById("dropZone");
+        dropZone.addEventListener("dragover", function (e) { e.preventDefault(); dropZone.classList.add("dragover"); });
+        dropZone.addEventListener("dragleave", function () { dropZone.classList.remove("dragover"); });
+        dropZone.addEventListener("drop", function (e) {
+          e.preventDefault();
+          dropZone.classList.remove("dragover");
+          if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFileObject(e.dataTransfer.files[0]);
+        });
+
+        document.getElementById("btnLoadSampleTop").addEventListener("click", loadServerSampleTxt);
+        document.getElementById("btnLoadSampleDrop").addEventListener("click", loadServerSampleTxt);
+        document.getElementById("btnDownloadSampleTop").addEventListener("click", downloadServerSampleTxt);
+        document.getElementById("btnDownloadSampleDrop").addEventListener("click", downloadServerSampleTxt);
+
+        document.getElementById("btnDeleteAllDups").addEventListener("click", deleteAllDuplicateBlocks);
+        document.getElementById("btnDeleteAllDupsCard").addEventListener("click", deleteAllDuplicateBlocks);
+        document.getElementById("btnDownloadRectifiedTop").addEventListener("click", downloadRectifiedTxt);
+        document.getElementById("btnDownloadRectifiedBanner").addEventListener("click", downloadRectifiedTxt);
+        document.getElementById("btnDownloadRectifiedCard").addEventListener("click", downloadRectifiedTxt);
+
+        document.getElementById("btnCloseDupBanner").addEventListener("click", function () {
+          document.getElementById("dupWarningBanner").style.display = "none";
+        });
+        document.getElementById("btnCloseAaBanner").addEventListener("click", function () {
+          document.getElementById("aaLimitBanner").style.display = "none";
+        });
+
+        document.getElementById("btnExportExcel").addEventListener("click", exportStyledExcel);
+
+        document.getElementById("viewPills").addEventListener("click", function (e) {
+          var btn = e.target.closest(".view-pill");
+          if (!btn) return;
+          document.querySelectorAll(".view-pill").forEach(function (p) { p.classList.remove("active"); });
+          btn.classList.add("active");
+          var target = btn.getAttribute("data-target");
+          document.querySelectorAll(".sheet-card").forEach(function (card) {
+            if (target === "all" || card.id === target) {
+              card.classList.remove("hidden");
+            } else {
+              card.classList.add("hidden");
+            }
+          });
+        });
+
+        document.getElementById("fltBdDistrict").addEventListener("change", renderBreakdownTable);
+        document.getElementById("fltBdType").addEventListener("change", renderBreakdownTable);
+        document.getElementById("chkBdSubtotals").addEventListener("change", renderBreakdownTable);
+
+        document.getElementById("fltDataSearch").addEventListener("input", renderCleanedDataTable);
+        document.getElementById("fltDataDistrict").addEventListener("change", renderCleanedDataTable);
+        document.getElementById("fltDataType").addEventListener("change", renderCleanedDataTable);
+        document.getElementById("chkDataExceedOnly").addEventListener("change", renderCleanedDataTable);
+
+        document.getElementById("tbodyRawBlocks").addEventListener("click", function (e) {
+          var btn = e.target.closest("[data-del-block]");
+          if (!btn) return;
+          var idx = parseInt(btn.getAttribute("data-del-block"), 10);
+          if (!isNaN(idx)) deleteSingleRawBlock(idx);
+        });
+
+        renderIssuesLogTable();
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initApp);
+      } else {
+        initApp();
+      }
+    })();
+  </script>
+</body>
+</html>
